@@ -4,6 +4,8 @@ import static me.prettyprint.hector.api.factory.HFactory.createColumn;
 import static me.prettyprint.hector.api.factory.HFactory.createKeyspace;
 import static me.prettyprint.hector.api.factory.HFactory.createMutator;
 import static me.prettyprint.hector.api.factory.HFactory.getOrCreateCluster;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import indexedcollections.IndexedCollections.ContainerCollection;
 
 import java.io.IOException;
@@ -12,8 +14,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import me.prettyprint.cassandra.serializers.ByteBufferSerializer;
 import me.prettyprint.cassandra.serializers.LongSerializer;
@@ -31,16 +31,20 @@ import org.apache.cassandra.db.marshal.LongType;
 import org.apache.cassandra.db.marshal.TimeUUIDType;
 import org.apache.cassandra.thrift.CfDef;
 import org.apache.cassandra.thrift.KsDef;
+import org.apache.log4j.Logger;
 import org.apache.thrift.transport.TTransportException;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
 import compositecomparer.hector.CompositeSerializer;
 
 /**
  * Example class showing usage of IndexedCollections.
  */
-public class Example {
+public class IndexTest {
 
-	private static final Logger logger = Logger.getLogger(Example.class
+	private static final Logger logger = Logger.getLogger(IndexTest.class
 			.getName());
 
 	public static final String KEYSPACE = "Keyspace";
@@ -51,23 +55,17 @@ public class Example {
 	public static final UUIDSerializer ue = new UUIDSerializer();
 	public static final LongSerializer le = new LongSerializer();
 
-	EmbeddedServerHelper embedded;
+	static EmbeddedServerHelper embedded;
 
-	Cluster cluster;
-	Keyspace ko;
+	static Cluster cluster;
+	static Keyspace ko;
 
-	public void setup() throws TTransportException, IOException,
+	@BeforeClass
+	public static void setup() throws TTransportException, IOException,
 			InterruptedException, ConfigurationException {
 		embedded = new EmbeddedServerHelper();
 		embedded.setup();
-	}
 
-	public void teardown() throws IOException {
-		embedded.teardown();
-		embedded = null;
-	}
-
-	protected void setupClient() {
 		cluster = getOrCreateCluster("MyCluster", "127.0.0.1:9170");
 		ko = createKeyspace(KEYSPACE, cluster);
 
@@ -80,17 +78,13 @@ public class Example {
 
 	}
 
-	public static void main(String[] args) {
-		try {
-			Example test = new Example();
-			test.run();
-		} catch (Exception e) {
-			logger.log(Level.SEVERE, "Error running test", e);
-			e.printStackTrace();
-		}
+	@AfterClass
+	public static void teardown() throws IOException {
+		embedded.teardown();
+		embedded = null;
 	}
 
-	public void setupColumnFamilies(List<CfDef> cfDefList) {
+	public static void setupColumnFamilies(List<CfDef> cfDefList) {
 
 		// "Accounts" -> account_name : 0
 		createCF(IndexedCollections.DEFAULT_ITEM_CF,
@@ -107,15 +101,15 @@ public class Example {
 
 	}
 
-	public void createCF(String name, String comparator_type,
+	public static void createCF(String name, String comparator_type,
 			List<CfDef> cfDefList) {
 		cfDefList.add(new CfDef(KEYSPACE, name)
 				.setComparator_type(comparator_type).setKey_cache_size(0)
 				.setRow_cache_size(0).setGc_grace_seconds(86400));
 	}
 
-	public void makeKeyspace(Cluster cluster, String name, String strategy,
-			int replicationFactor, List<CfDef> cfDefList) {
+	public static void makeKeyspace(Cluster cluster, String name,
+			String strategy, int replicationFactor, List<CfDef> cfDefList) {
 
 		if (cfDefList == null) {
 			cfDefList = new ArrayList<CfDef>();
@@ -127,16 +121,16 @@ public class Example {
 			cluster.addKeyspace(new ThriftKsDef(ksDef));
 			return;
 		} catch (Throwable e) {
-			logger.log(Level.SEVERE, "Exception while creating keyspace, "
-					+ name + " - probably already exists", e);
+			logger.error("Exception while creating keyspace, " + name
+					+ " - probably already exists", e);
 		}
 
 		for (CfDef cfDef : cfDefList) {
 			try {
 				cluster.addColumnFamily(new ThriftCfDef(cfDef));
 			} catch (Throwable e) {
-				logger.log(Level.SEVERE, "Exception while creating CF, "
-						+ cfDef.getName() + " - probably already exists", e);
+				logger.error("Exception while creating CF, " + cfDef.getName()
+						+ " - probably already exists", e);
 			}
 		}
 	}
@@ -159,10 +153,9 @@ public class Example {
 				IndexedCollections.defaultCFSet, ue, ue);
 	}
 
-	public void run() throws IOException, TTransportException,
+	@Test
+	public void testIndexes() throws IOException, TTransportException,
 			InterruptedException, ConfigurationException {
-		setup();
-		setupClient();
 
 		UUID g1 = createEntity("company");
 		ContainerCollection<UUID> container = new ContainerCollection<UUID>(g1,
@@ -195,8 +188,8 @@ public class Example {
 
 		logger.info(results.size() + " results found");
 
-		assert (results.size() == 1);
-		assert (results.get(0).equals(e2));
+		assertEquals(1, results.size());
+		assertTrue(results.get(0).equals(e2));
 
 		logger.info("Result found is " + results.get(0));
 
@@ -211,7 +204,7 @@ public class Example {
 
 		logger.info(results.size() + " results found");
 
-		assert (results.size() == 0);
+		assertEquals(0, results.size());
 
 		logger.info("Select where name>='bill' and name<'c'");
 
@@ -221,10 +214,8 @@ public class Example {
 
 		logger.info(results.size() + " results found");
 
-		assert (results.size() == 2);
+		assertEquals(2, results.size());
 
-		teardown();
-		System.exit(0);
 	}
 
 }
