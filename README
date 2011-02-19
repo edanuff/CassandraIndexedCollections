@@ -1,0 +1,13 @@
+Indexed Collections for Cassandra
+
+This is an implementation of the indexing technique described here:
+
+http://www.anuff.com/2010/07/secondary-indexes-in-cassandra.html
+
+This required Hector, the Java client for Cassandra (https://github.com/rantav/hector), to run.
+
+It also uses Cassandra Composite Types (https://github.com/edanuff/CassandraCompositeType) and
+requires that the CompositeType comparer be installed in the running Cassandra instance.
+
+While some of this has been in use in another project, this implementation was largely
+created from scratch, so although the technique works very well, this code might not.

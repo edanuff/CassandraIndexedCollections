@@ -140,21 +140,31 @@ public class IndexedCollections {
 		q.setColumnFamily(cf.getIndex());
 		q.setKey(se.toByteBuffer(columnIndexKey));
 
-		if (startValue == null) {
-			startValue = new byte[0];
-		}
-		if (endValue == null) {
-			endValue = startValue;
-		}
-
 		Composite start = null;
-		if (startResult != null) {
+
+		if (startValue == null) {
+			if (startResult != null) {
+				start = new Composite(Composite.MATCH_MINIMUM, startResult);
+			} else {
+				start = new Composite(Composite.MATCH_MINIMUM);
+			}
+		} else if (startResult != null) {
 			start = new Composite(startValue, startResult);
 		} else {
 			start = new Composite(startValue);
 		}
 
-		Composite finish = new Composite(endValue, Composite.MATCH_MAXIMUM);
+		Composite finish = null;
+
+		if (endValue == null) {
+			if (startValue != null) {
+				finish = new Composite(startValue, Composite.MATCH_MAXIMUM);
+			} else {
+				finish = new Composite(Composite.MATCH_MAXIMUM);
+			}
+		} else {
+			finish = new Composite(endValue);
+		}
 
 		q.setRange(start, finish, reversed, count);
 		QueryResult<ColumnSlice<Composite, ByteBuffer>> r = q.execute();

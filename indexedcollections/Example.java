@@ -177,8 +177,10 @@ public class Example {
 
 		IndexedCollections.setItemColumn(ko, e1, "name", "bob", containers,
 				IndexedCollections.defaultCFSet, ue, se, se, ue);
+
 		IndexedCollections.setItemColumn(ko, e2, "name", "fred", containers,
 				IndexedCollections.defaultCFSet, ue, se, se, ue);
+
 		IndexedCollections.setItemColumn(ko, e3, "name", "bill", containers,
 				IndexedCollections.defaultCFSet, ue, se, se, ue);
 
@@ -207,6 +209,16 @@ public class Example {
 		logger.info(results.size() + " results found");
 
 		assert (results.size() == 0);
+
+		logger.info("Select where name>='bill' and name<'c'");
+
+		results = IndexedCollections.searchContainer(ko, container, "name",
+				"bill", "c", null, 100, false, IndexedCollections.defaultCFSet,
+				ue, ue, se);
+
+		logger.info(results.size() + " results found");
+
+		assert (results.size() == 2);
 
 		teardown();
 		System.exit(0);
