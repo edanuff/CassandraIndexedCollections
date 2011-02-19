@@ -35,6 +35,9 @@ import org.apache.thrift.transport.TTransportException;
 
 import compositecomparer.hector.CompositeSerializer;
 
+/**
+ * Example class showing usage of IndexedCollections.
+ */
 public class Example {
 
 	private static final Logger logger = Logger.getLogger(Example.class
@@ -90,16 +93,16 @@ public class Example {
 	public void setupColumnFamilies(List<CfDef> cfDefList) {
 
 		// "Accounts" -> account_name : 0
-		createCF(IndexedCollections.ITEM_CF, BytesType.class.getSimpleName(),
-				cfDefList);
+		createCF(IndexedCollections.DEFAULT_ITEM_CF,
+				BytesType.class.getSimpleName(), cfDefList);
 
-		createCF(IndexedCollections.CONTAINER_ITEMS_CF,
+		createCF(IndexedCollections.DEFAULT_CONTAINER_ITEMS_CF,
 				TimeUUIDType.class.getSimpleName(), cfDefList);
 
-		createCF(IndexedCollections.CONTAINER_ITEMS_COLUMN_INDEX_CF,
+		createCF(IndexedCollections.DEFAULT_CONTAINER_ITEMS_COLUMN_INDEX_CF,
 				"compositecomparer.CompositeType", cfDefList);
 
-		createCF(IndexedCollections.CONTAINER_ITEM_INDEX_ENTRIES,
+		createCF(IndexedCollections.DEFAULT_CONTAINER_ITEM_INDEX_ENTRIES,
 				LongType.class.getSimpleName(), cfDefList);
 
 	}
@@ -145,7 +148,7 @@ public class Example {
 
 	public UUID createEntity(String type) {
 		UUID id = newTimeUUID();
-		createMutator(ko, ue).insert(id, IndexedCollections.ITEM_CF,
+		createMutator(ko, ue).insert(id, IndexedCollections.DEFAULT_ITEM_CF,
 				createColumn("type", type, se, se));
 		return id;
 	}

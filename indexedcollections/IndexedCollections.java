@@ -27,15 +27,24 @@ import me.prettyprint.hector.api.query.SliceQuery;
 import compositecomparer.Composite;
 import compositecomparer.hector.CompositeSerializer;
 
+/**
+ * Simple indexing library using composite types
+ * (https://github.com/edanuff/CassandraCompositeType) to implement indexed
+ * collections in Cassandra.
+ * 
+ * See http://www.anuff.com/2010/07/secondary-indexes-in-cassandra.html for a
+ * detailed discussion of the technique used here.
+ * 
+ */
 public class IndexedCollections {
 
 	private static final Logger logger = Logger
 			.getLogger(IndexedCollections.class.getName());
 
-	public static final String ITEM_CF = "Item";
-	public static final String CONTAINER_ITEMS_CF = "Container_Items";
-	public static final String CONTAINER_ITEMS_COLUMN_INDEX_CF = "Container_Items_Column_Index";
-	public static final String CONTAINER_ITEM_INDEX_ENTRIES = "Container_Item_Index_Entries";
+	public static final String DEFAULT_ITEM_CF = "Item";
+	public static final String DEFAULT_CONTAINER_ITEMS_CF = "Container_Items";
+	public static final String DEFAULT_CONTAINER_ITEMS_COLUMN_INDEX_CF = "Container_Items_Column_Index";
+	public static final String DEFAULT_CONTAINER_ITEM_INDEX_ENTRIES = "Container_Item_Index_Entries";
 
 	public static final CollectionCFSet defaultCFSet = new CollectionCFSet();
 
@@ -45,6 +54,38 @@ public class IndexedCollections {
 	public static final UUIDSerializer ue = new UUIDSerializer();
 	public static final LongSerializer le = new LongSerializer();
 
+	/**
+	 * Sets the item column value for an item contained in a set of collections.
+	 * 
+	 * @param <CK>
+	 *            the container's key type
+	 * @param <IK>
+	 *            the item's key type
+	 * @param <N>
+	 *            the item's column name type
+	 * @param <V>
+	 *            the item's column value type
+	 * @param ko
+	 *            the keyspace operator
+	 * @param itemKey
+	 *            the item row key
+	 * @param columnName
+	 *            the name of the column to set
+	 * @param columnValue
+	 *            the value to set the column to
+	 * @param containers
+	 *            the set of containers the item is in
+	 * @param cf
+	 *            the column families to use
+	 * @param itemKeySerializer
+	 *            the item key serializer
+	 * @param nameSerializer
+	 *            the column name serializer
+	 * @param valueSerializer
+	 *            the column value serializer
+	 * @param containerKeySerializer
+	 *            the container key serializer
+	 */
 	public static <CK, IK, N, V> void setItemColumn(Keyspace ko, IK itemKey,
 			N columnName, V columnValue,
 			Set<ContainerCollection<CK>> containers, CollectionCFSet cf,
@@ -65,6 +106,9 @@ public class IndexedCollections {
 			String indexEntriesKey = container.getKey() + ":"
 					+ itemKey.toString() + ":" + columnName.toString();
 
+			// Get all know previous index entries for this item's
+			// indexed column from the item's index entry list
+
 			SliceQuery<String, Long, Composite> q = createSliceQuery(ko, se,
 					le, ce);
 			q.setColumnFamily(cf.getEntries());
@@ -73,6 +117,9 @@ public class IndexedCollections {
 			QueryResult<ColumnSlice<Long, Composite>> r = q.execute();
 			ColumnSlice<Long, Composite> slice = r.get();
 			List<HColumn<Long, Composite>> results = slice.getColumns();
+
+			// Delete all previous index entites from both the container's index
+			// and the item's index entry list
 
 			for (HColumn<Long, Composite> column : results) {
 				long prev_timestamp = column.getName();
@@ -93,6 +140,9 @@ public class IndexedCollections {
 
 			}
 
+			// Add the new index entry into the container's index and the item's
+			// index entry list
+
 			if (columnValue != null) {
 				logger.info("Insert {composite(" + columnValue + ", " + itemKey
 						+ ", " + timestamp + ") : " + timestamp + "} into "
@@ -112,6 +162,9 @@ public class IndexedCollections {
 
 		}
 
+		// Store the new column value into the item
+		// If new value is null, delete the value instead
+
 		if (columnValue != null) {
 
 			logger.info("Insert " + columnName + " : " + columnValue + " into "
@@ -119,12 +172,50 @@ public class IndexedCollections {
 			batch.addInsertion(itemKeySerializer.toByteBuffer(itemKey), cf
 					.getItem(), HFactory.createColumn(columnName, columnValue,
 					nameSerializer, valueSerializer));
+		} else {
+			batch.addDeletion(itemKeySerializer.toByteBuffer(itemKey),
+					cf.getItem(), columnName, nameSerializer, timestamp);
 		}
 
 		batch.execute();
 
 	}
 
+	/**
+	 * Search container.
+	 * 
+	 * @param <IK>
+	 *            the item's key type
+	 * @param <CK>
+	 *            the container's key type
+	 * @param <N>
+	 *            the item's column name type
+	 * @param ko
+	 *            the keyspace operator
+	 * @param container
+	 *            the ContainerCollection (container key and collection name)
+	 * @param columnName
+	 *            the item's column name
+	 * @param startValue
+	 *            the start value for the specified column (inclusive)
+	 * @param endValue
+	 *            the end value for the specified column (exclusive)
+	 * @param startResult
+	 *            the start result row key
+	 * @param count
+	 *            the number of row keys to return
+	 * @param reversed
+	 *            search in reverse order
+	 * @param cf
+	 *            the column family set
+	 * @param containerKeySerializer
+	 *            the container key serializer
+	 * @param itemKeySerializer
+	 *            the item key serializer
+	 * @param nameSerializer
+	 *            the column name serializer
+	 * @return the list of row keys for items who's column value matches
+	 */
 	public static <IK, CK, N> List<IK> searchContainer(Keyspace ko,
 			ContainerCollection<CK> container, N columnName, Object startValue,
 			Object endValue, IK startResult, int count, boolean reversed,
@@ -184,6 +275,30 @@ public class IndexedCollections {
 		return items;
 	}
 
+	/**
+	 * Adds the item to collection.
+	 * 
+	 * @param <CK>
+	 *            the container's key type
+	 * @param <IK>
+	 *            the item's key type
+	 * @param <N>
+	 *            the item's column name type
+	 * @param <V>
+	 *            the item's column value type
+	 * @param ko
+	 *            the keyspace operator
+	 * @param container
+	 *            the ContainerCollection (container key and collection name)
+	 * @param itemKey
+	 *            the item's row key
+	 * @param cf
+	 *            the column families to use
+	 * @param containerKeySerializer
+	 *            the container key serializer
+	 * @param itemKeySerializer
+	 *            the item key serializer
+	 */
 	public static <CK, IK, N, V> void addItemToCollection(Keyspace ko,
 			ContainerCollection<CK> container, IK itemKey, CollectionCFSet cf,
 			Serializer<CK> containerKeySerializer,
@@ -191,7 +306,7 @@ public class IndexedCollections {
 
 		createMutator(ko, se).insert(
 				container.getKey(),
-				IndexedCollections.CONTAINER_ITEMS_CF,
+				cf.getItems(),
 				createColumn(itemKey, HFactory.createClock(),
 						itemKeySerializer, le));
 
@@ -209,12 +324,17 @@ public class IndexedCollections {
 		return st.fromByteBuffer(so.toByteBuffer(obj));
 	}
 
+	/**
+	 * CollectionCFSet contains the names of the four column families needed to
+	 * implement indexed collections. Default CF names are provided, but can be
+	 * anything that makes sense for the application.
+	 */
 	public static class CollectionCFSet {
 
-		private String item = ITEM_CF;
-		private String items = CONTAINER_ITEMS_CF;
-		private String index = CONTAINER_ITEMS_COLUMN_INDEX_CF;
-		private String entries = CONTAINER_ITEM_INDEX_ENTRIES;
+		private String item = DEFAULT_ITEM_CF;
+		private String items = DEFAULT_CONTAINER_ITEMS_CF;
+		private String index = DEFAULT_CONTAINER_ITEMS_COLUMN_INDEX_CF;
+		private String entries = DEFAULT_CONTAINER_ITEM_INDEX_ENTRIES;
 
 		public CollectionCFSet() {
 		}
@@ -260,6 +380,14 @@ public class IndexedCollections {
 		}
 	}
 
+	/**
+	 * ContainerCollection represents the containing entity's key and collection
+	 * name. The assumption is that an entity can have multiple collections,
+	 * each with their own name.
+	 * 
+	 * @param <CK>
+	 *            the container's row key type
+	 */
 	public static class ContainerCollection<CK> {
 		private CK ownerKey;
 		private String collectionName;
