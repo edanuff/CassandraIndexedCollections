@@ -86,7 +86,6 @@ public class IndexTest {
 
 	public static void setupColumnFamilies(List<CfDef> cfDefList) {
 
-		// "Accounts" -> account_name : 0
 		createCF(IndexedCollections.DEFAULT_ITEM_CF,
 				BytesType.class.getSimpleName(), cfDefList);
 
