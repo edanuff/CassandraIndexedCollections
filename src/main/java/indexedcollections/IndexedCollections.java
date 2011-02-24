@@ -1,5 +1,26 @@
 package indexedcollections;
 
+/*
+ * 
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ * 
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ * 
+ */
+
 import static me.prettyprint.hector.api.factory.HFactory.createColumn;
 import static me.prettyprint.hector.api.factory.HFactory.createMutator;
 import static me.prettyprint.hector.api.factory.HFactory.createSliceQuery;
@@ -10,10 +31,11 @@ import java.util.List;
 import java.util.Set;
 
 import me.prettyprint.cassandra.serializers.ByteBufferSerializer;
+import me.prettyprint.cassandra.serializers.BytesArraySerializer;
+import me.prettyprint.cassandra.serializers.CompositeSerializer;
 import me.prettyprint.cassandra.serializers.LongSerializer;
 import me.prettyprint.cassandra.serializers.SerializerTypeInferer;
 import me.prettyprint.cassandra.serializers.StringSerializer;
-import me.prettyprint.cassandra.serializers.UUIDSerializer;
 import me.prettyprint.hector.api.Keyspace;
 import me.prettyprint.hector.api.Serializer;
 import me.prettyprint.hector.api.beans.ColumnSlice;
@@ -23,10 +45,8 @@ import me.prettyprint.hector.api.mutation.Mutator;
 import me.prettyprint.hector.api.query.QueryResult;
 import me.prettyprint.hector.api.query.SliceQuery;
 
+import org.apache.cassandra.db.marshal.Composite;
 import org.apache.log4j.Logger;
-
-import compositecomparer.Composite;
-import compositecomparer.hector.CompositeSerializer;
 
 /**
  * Simple indexing library using composite types
@@ -35,6 +55,12 @@ import compositecomparer.hector.CompositeSerializer;
  * 
  * See http://www.anuff.com/2010/07/secondary-indexes-in-cassandra.html for a
  * detailed discussion of the technique used here.
+ * 
+ * @author Ed Anuff
+ * @see <a
+ *      href="http://www.anuff.com/2010/07/secondary-indexes-in-cassandra.html">Secondary
+ *      indexes in Cassandra</a>
+ * @see "org.apache.cassandra.db.marshal.CompositeType"
  * 
  */
 public class IndexedCollections {
@@ -51,8 +77,8 @@ public class IndexedCollections {
 
 	public static final StringSerializer se = new StringSerializer();
 	public static final ByteBufferSerializer be = new ByteBufferSerializer();
+	public static final BytesArraySerializer bae = new BytesArraySerializer();
 	public static final CompositeSerializer ce = new CompositeSerializer();
-	public static final UUIDSerializer ue = new UUIDSerializer();
 	public static final LongSerializer le = new LongSerializer();
 
 	/**
@@ -150,7 +176,7 @@ public class IndexedCollections {
 						+ cf.getIndex() + "(" + columnIndexKey + ")");
 				batch.addInsertion(se.toByteBuffer(columnIndexKey), cf
 						.getIndex(), HFactory.createColumn(new Composite(
-						columnValue, itemKey, timestamp), timestamp, ce, le));
+						columnValue, itemKey, timestamp), new byte[0], ce, bae));
 
 				logger.info("Insert {" + timestamp + " : " + columnValue
 						+ "} into " + cf.getEntries() + "(" + columnIndexKey
