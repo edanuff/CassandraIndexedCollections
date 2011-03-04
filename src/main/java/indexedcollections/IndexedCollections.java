@@ -32,7 +32,6 @@ import java.util.Set;
 
 import me.prettyprint.cassandra.serializers.ByteBufferSerializer;
 import me.prettyprint.cassandra.serializers.BytesArraySerializer;
-import me.prettyprint.cassandra.serializers.CompositeSerializer;
 import me.prettyprint.cassandra.serializers.LongSerializer;
 import me.prettyprint.cassandra.serializers.SerializerTypeInferer;
 import me.prettyprint.cassandra.serializers.StringSerializer;
@@ -45,8 +44,10 @@ import me.prettyprint.hector.api.mutation.Mutator;
 import me.prettyprint.hector.api.query.QueryResult;
 import me.prettyprint.hector.api.query.SliceQuery;
 
-import org.apache.cassandra.db.marshal.Composite;
 import org.apache.log4j.Logger;
+
+import compositecomparer.Composite;
+import compositecomparer.hector.CompositeSerializer;
 
 /**
  * Simple indexing library using composite types
@@ -143,20 +144,20 @@ public class IndexedCollections {
 			q.setRange(null, null, false, 100);
 			QueryResult<ColumnSlice<Long, Composite>> r = q.execute();
 			ColumnSlice<Long, Composite> slice = r.get();
-			List<HColumn<Long, Composite>> results = slice.getColumns();
+			List<HColumn<Long, Composite>> entries = slice.getColumns();
 
 			// Delete all previous index entites from both the container's index
 			// and the item's index entry list
 
-			for (HColumn<Long, Composite> column : results) {
-				long prev_timestamp = column.getName();
-				Object prev_value = column.getValue().toArray()[0];
+			for (HColumn<Long, Composite> entry : entries) {
+				long prev_timestamp = entry.getName();
+				Object prev_value = entry.getValue().toArray()[0];
 
 				logger.info("Delete {" + prev_timestamp + " : " + prev_value
 						+ "} from " + cf.getEntries() + "(" + columnIndexKey
 						+ ")");
 				batch.addDeletion(se.toByteBuffer(indexEntriesKey),
-						cf.getEntries(), column.getName(), le, timestamp);
+						cf.getEntries(), entry.getName(), le, timestamp);
 
 				logger.info("Delete composite(" + prev_value + ", " + itemKey
 						+ ", " + prev_timestamp + ") from " + cf.getIndex()
