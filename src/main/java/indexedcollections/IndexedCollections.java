@@ -46,8 +46,8 @@ import me.prettyprint.hector.api.query.SliceQuery;
 
 import org.apache.log4j.Logger;
 
-import compositecomparer.Composite;
-import compositecomparer.hector.CompositeSerializer;
+import comparators.Composite;
+import comparators.hector.CompositeSerializer;
 
 /**
  * Simple indexing library using composite types

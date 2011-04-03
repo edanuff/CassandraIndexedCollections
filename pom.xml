@@ -46,10 +46,10 @@
 						</goals>
 						<configuration>
 							<packaging>jar</packaging>
-							<groupId>cassandra-composite-types</groupId>
-							<artifactId>cassandra-composite-types</artifactId>
+							<groupId>cassandra-composite-type</groupId>
+							<artifactId>cassandra-composite-type</artifactId>
 							<version>0.0.1</version>
-							<file>${basedir}/lib/cassandra-composite-types-0.0.1.jar</file>
+							<file>${basedir}/lib/cassandra-composite-type-0.0.1.jar</file>
 						</configuration>
 					</execution>
 				</executions>
@@ -80,8 +80,8 @@
 			<version>3.2</version>
 		</dependency>
 		<dependency>
-			<groupId>cassandra-composite-types</groupId>
-			<artifactId>cassandra-composite-types</artifactId>
+			<groupId>cassandra-composite-type</groupId>
+			<artifactId>cassandra-composite-type</artifactId>
 			<version>0.0.1</version>
 		</dependency>
 		<dependency>

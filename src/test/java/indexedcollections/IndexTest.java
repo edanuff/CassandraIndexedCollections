@@ -37,8 +37,7 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import compositecomparer.hector.CompositeSerializer;
-
+import comparators.hector.CompositeSerializer;
 
 /**
  * Example class showing usage of IndexedCollections.
@@ -94,7 +93,7 @@ public class IndexTest {
 				TimeUUIDType.class.getSimpleName(), cfDefList);
 
 		createCF(IndexedCollections.DEFAULT_CONTAINER_ITEMS_COLUMN_INDEX_CF,
-				"compositecomparer.CompositeType", cfDefList);
+				"comparators.CompositeType", cfDefList);
 
 		createCF(IndexedCollections.DEFAULT_CONTAINER_ITEM_INDEX_ENTRIES,
 				LongType.class.getSimpleName(), cfDefList);
