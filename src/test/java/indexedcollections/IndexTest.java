@@ -28,6 +28,7 @@ import me.prettyprint.cassandra.service.ThriftKsDef;
 import me.prettyprint.cassandra.testutils.EmbeddedServerHelper;
 import me.prettyprint.hector.api.Cluster;
 import me.prettyprint.hector.api.Keyspace;
+import me.prettyprint.hector.api.Serializer;
 
 import org.apache.cassandra.config.ConfigurationException;
 import org.apache.cassandra.db.marshal.BytesType;
@@ -94,22 +95,17 @@ public class IndexTest {
 
 		// Set name column values
 
-		IndexedCollections.setItemColumn(ko, e1, "name", "bob", containers,
-				IndexedCollections.defaultCFSet, ue, se, se, ue);
+		setEntityColumn(e1, "name", "bob", containers, se);
 
-		IndexedCollections.setItemColumn(ko, e2, "name", "fred", containers,
-				IndexedCollections.defaultCFSet, ue, se, se, ue);
+		setEntityColumn(e2, "name", "fred", containers, se);
 
-		IndexedCollections.setItemColumn(ko, e3, "name", "bill", containers,
-				IndexedCollections.defaultCFSet, ue, se, se, ue);
+		setEntityColumn(e3, "name", "bill", containers, se);
 
 		// Do an exact match search for name column
 
 		logger.info("SELECT WHERE name = 'fred'");
 
-		List<UUID> results = IndexedCollections.searchContainer(ko, container,
-				"name", "fred", null, false, null, 100, false,
-				IndexedCollections.defaultCFSet, ue, ue, se);
+		List<UUID> results = searchContainer(container, "name", "fred");
 
 		logger.info(results.size() + " results found");
 
@@ -121,14 +117,11 @@ public class IndexTest {
 		// Change the value of a name column and make sure the old value is no
 		// longer in the index
 
-		IndexedCollections.setItemColumn(ko, e2, "name", "steve", containers,
-				IndexedCollections.defaultCFSet, ue, se, se, ue);
+		setEntityColumn(e2, "name", "steve", containers, se);
 
 		logger.info("SELECT WHERE name = 'fred'");
 
-		results = IndexedCollections.searchContainer(ko, container, "name",
-				"fred", null, 100, false, IndexedCollections.defaultCFSet, ue,
-				ue, se);
+		results = searchContainer(container, "name", "fred");
 
 		logger.info(results.size() + " results found");
 
@@ -138,9 +131,7 @@ public class IndexTest {
 
 		logger.info("SELECT WHERE name >= 'bill' AND name < 'c'");
 
-		results = IndexedCollections.searchContainer(ko, container, "name",
-				"bill", "c", false, null, 100, false,
-				IndexedCollections.defaultCFSet, ue, ue, se);
+		results = searchContainer(container, "name", "bill", "c", false);
 
 		logger.info(results.size() + " results found");
 
@@ -148,22 +139,17 @@ public class IndexTest {
 
 		// Set column values for height
 
-		IndexedCollections.setItemColumn(ko, e1, "height", (long) 5,
-				containers, IndexedCollections.defaultCFSet, ue, se, le, ue);
+		setEntityColumn(e1, "height", (long) 5, containers, le);
 
-		IndexedCollections.setItemColumn(ko, e2, "height", (long) 6,
-				containers, IndexedCollections.defaultCFSet, ue, se, le, ue);
+		setEntityColumn(e2, "height", (long) 6, containers, le);
 
-		IndexedCollections.setItemColumn(ko, e3, "height", (long) 7,
-				containers, IndexedCollections.defaultCFSet, ue, se, le, ue);
+		setEntityColumn(e3, "height", (long) 7, containers, le);
 
 		// Do an numeric exact match search for height
 
 		logger.info("SELECT WHERE height = 6");
 
-		results = IndexedCollections.searchContainer(ko, container, "height",
-				6, null, 100, false, IndexedCollections.defaultCFSet, ue, ue,
-				se);
+		results = searchContainer(container, "height", 6);
 
 		logger.info(results.size() + " results found");
 
@@ -173,9 +159,7 @@ public class IndexTest {
 
 		logger.info("SELECT WHERE height >= 6 AND name < 10");
 
-		results = IndexedCollections.searchContainer(ko, container, "height",
-				6, 10, false, null, 100, false,
-				IndexedCollections.defaultCFSet, ue, ue, se);
+		results = searchContainer(container, "height", 6, 10, false);
 
 		logger.info(results.size() + " results found");
 
@@ -184,12 +168,9 @@ public class IndexTest {
 		// Change a numeric column value and make sure it's no longer in the
 		// index
 
-		IndexedCollections.setItemColumn(ko, e3, "height", (long) 5,
-				containers, IndexedCollections.defaultCFSet, ue, se, le, ue);
+		setEntityColumn(e3, "height", (long) 5, containers, le);
 
-		results = IndexedCollections.searchContainer(ko, container, "height",
-				6, 10, false, null, 100, false,
-				IndexedCollections.defaultCFSet, ue, ue, se);
+		results = searchContainer(container, "height", 6, 10, false);
 
 		logger.info(results.size() + " results found");
 
@@ -197,23 +178,15 @@ public class IndexTest {
 
 		// Set byte values in columns
 
-		IndexedCollections.setItemColumn(ko, e1, "bytes",
-				new byte[] { 1, 2, 3 }, containers,
-				IndexedCollections.defaultCFSet, ue, se, bae, ue);
+		setEntityColumn(e1, "bytes", new byte[] { 1, 2, 3 }, containers, bae);
 
-		IndexedCollections.setItemColumn(ko, e2, "bytes",
-				new byte[] { 1, 2, 4 }, containers,
-				IndexedCollections.defaultCFSet, ue, se, bae, ue);
+		setEntityColumn(e2, "bytes", new byte[] { 1, 2, 4 }, containers, bae);
 
-		IndexedCollections.setItemColumn(ko, e3, "bytes",
-				new byte[] { 1, 2, 5 }, containers,
-				IndexedCollections.defaultCFSet, ue, se, bae, ue);
+		setEntityColumn(e3, "bytes", new byte[] { 1, 2, 5 }, containers, bae);
 
 		// Do a byte array exact match search
 
-		results = IndexedCollections.searchContainer(ko, container, "bytes",
-				new byte[] { 1, 2, 4 }, null, 100, false,
-				IndexedCollections.defaultCFSet, ue, ue, se);
+		results = searchContainer(container, "bytes", new byte[] { 1, 2, 4 });
 
 		logger.info(results.size() + " results found");
 
@@ -221,9 +194,8 @@ public class IndexTest {
 
 		// Do a byte array range search
 
-		results = IndexedCollections.searchContainer(ko, container, "bytes",
-				new byte[] { 1, 2, 4 }, new byte[] { 10 }, false, null, 100,
-				false, IndexedCollections.defaultCFSet, ue, ue, se);
+		results = searchContainer(container, "bytes", new byte[] { 1, 2, 4 },
+				new byte[] { 10 }, false);
 
 		logger.info(results.size() + " results found");
 
@@ -231,21 +203,17 @@ public class IndexTest {
 
 		// Store some text columns
 
-		IndexedCollections.setItemColumn(ko, e1, "location", "san francisco",
-				containers, IndexedCollections.defaultCFSet, ue, se, se, ue);
+		setEntityColumn(e1, "location", "san francisco", containers, se);
 
-		IndexedCollections.setItemColumn(ko, e2, "location", "san diego",
-				containers, IndexedCollections.defaultCFSet, ue, se, se, ue);
+		setEntityColumn(e2, "location", "san diego", containers, se);
 
-		IndexedCollections.setItemColumn(ko, e3, "location", "santa clara",
-				containers, IndexedCollections.defaultCFSet, ue, se, se, ue);
+		setEntityColumn(e3, "location", "santa clara", containers, se);
 
 		// Do a range search exclusive on the same value for start and end and
 		// make sure we get 0 results
 
-		results = IndexedCollections.searchContainer(ko, container, "location",
-				"san francisco", "san francisco", false, null, 100, false,
-				IndexedCollections.defaultCFSet, ue, ue, se);
+		results = searchContainer(container, "location", "san francisco",
+				"san francisco", false);
 
 		logger.info(results.size() + " results found");
 
@@ -254,9 +222,8 @@ public class IndexTest {
 		// Do a range search inclusive on the same value for start and end and
 		// make sure we get 1 result
 
-		results = IndexedCollections.searchContainer(ko, container, "location",
-				"san francisco", "san francisco", true, null, 100, false,
-				IndexedCollections.defaultCFSet, ue, ue, se);
+		results = searchContainer(container, "location", "san francisco",
+				"san francisco", true);
 
 		logger.info(results.size() + " results found");
 
@@ -349,6 +316,10 @@ public class IndexTest {
 		return new UUID(eaioUUID.time, eaioUUID.clockSeqAndNode);
 	}
 
+	/*
+	 * Convenience methods for wrapping IndexedCollections methods
+	 */
+
 	public UUID createEntity(String type) {
 		UUID id = newTimeUUID();
 		createMutator(ko, ue).insert(id, IndexedCollections.DEFAULT_ITEM_CF,
@@ -366,6 +337,32 @@ public class IndexTest {
 			ContainerCollection<UUID> container) {
 		return IndexedCollections.getItemsInCollection(ko, container,
 				IndexedCollections.defaultCFSet, ue);
+	}
+
+	public static <V> void setEntityColumn(UUID itemEntity, String columnName,
+			V columnValue, Set<ContainerCollection<UUID>> containers,
+			Serializer<V> valueSerializer) {
+		IndexedCollections.setItemColumn(ko, itemEntity, columnName,
+				columnValue, containers, IndexedCollections.defaultCFSet, ue,
+				se, valueSerializer, ue);
+	}
+
+	public static List<UUID> searchContainer(
+			ContainerCollection<UUID> container, String columnName,
+			Object searchValue) {
+
+		return IndexedCollections.searchContainer(ko, container, columnName,
+				searchValue, null, 100, false, IndexedCollections.defaultCFSet,
+				ue, ue, se);
+	}
+
+	public static List<UUID> searchContainer(
+			ContainerCollection<UUID> container, String columnName,
+			Object startValue, Object endValue, boolean inclusive) {
+
+		return IndexedCollections.searchContainer(ko, container, columnName,
+				startValue, endValue, inclusive, null, 100, false,
+				IndexedCollections.defaultCFSet, ue, ue, se);
 	}
 
 }
