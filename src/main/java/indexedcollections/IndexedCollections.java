@@ -51,7 +51,10 @@ import me.prettyprint.hector.api.mutation.Mutator;
 import me.prettyprint.hector.api.query.QueryResult;
 import me.prettyprint.hector.api.query.SliceQuery;
 
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.log4j.Logger;
+
+import com.eaio.uuid.UUIDGen;
 
 /**
  * Simple indexing library using composite types
@@ -98,28 +101,93 @@ public class IndexedCollections {
 		return new UUID(eaioUUID.time, eaioUUID.clockSeqAndNode);
 	}
 
+	/**
+	 * Convert values to be indexed into types that can be compared by
+	 * Cassandra: UTF8Type, UUIDType, IntegerType, and BytesType
+	 * 
+	 */
 	public static Object getIndexableValue(Object value) {
-		if ((value instanceof String) || (value instanceof UUID)) {
+
+		// Strings, UUIDs, and BigIntegers map to Cassandra
+		// UTF8Type, UUIDType, and IntegerType
+		if ((value instanceof String) || (value instanceof UUID)
+				|| (value instanceof BigInteger)) {
 			return value;
 		}
+
+		// For any numeric values, turn them into a long
+		// and make them BigIntegers for IntegerType
 		if (value instanceof Number) {
 			return BigInteger.valueOf(((Number) value).longValue());
 		}
+
+		// Anything else, we're going to have to use BytesType
 		return TypeInferringSerializer.get().toByteBuffer(value);
 	}
 
+	/**
+	 * Create a value that will compare as one more than the specified value. A
+	 * little bit hacky, but makes things quite a bit easier.
+	 * 
+	 */
 	public static Object getNextIndexableValue(Object value) {
+
 		if (value instanceof String) {
+
 			return ((String) value) + "\u0000";
+
 		} else if (value instanceof UUID) {
-			// TODO do the right thing for different UUID types
-			return value;
+			UUID uuid = ((UUID) value);
+
+			// increase timestamp by 1 for time UUIDS
+			int version = uuid.version();
+			if (version == 1) {
+				return new UUID(UUIDGen.createTime(uuid.timestamp() + 1),
+						uuid.getLeastSignificantBits());
+			}
+
+			// for lexical, treat as 16 byte unsigned integer
+			ByteBuffer bb = ByteBuffer.allocate(16);
+			bb.putLong(uuid.getMostSignificantBits());
+			bb.putLong(uuid.getLeastSignificantBits());
+			BigInteger big = new BigInteger(bb.array());
+			big = big.add(BigInteger.valueOf(1));
+			byte[] bytes = big.toByteArray();
+			if (bytes.length < 16) {
+				bytes = ArrayUtils.addAll(new byte[16 - bytes.length], bytes);
+			}
+			bytes[6] &= 0x0f;
+			bytes[6] |= ((byte) version) << 4;
+			bytes[8] &= 0x3f;
+			bytes[8] |= 0x80;
+			bb = ByteBuffer.wrap(bytes);
+			return new UUID(bb.getLong(), bb.getLong());
+
 		} else if (value instanceof Number) {
+
 			return BigInteger.valueOf(((Number) value).longValue() + 1);
+
+		} else if (value instanceof BigInteger) {
+
+			return ((BigInteger) value).add(BigInteger.valueOf(1));
+
 		}
 		return TypeInferringSerializer.get().toByteBuffer(value).put((byte) 0);
 	}
 
+	/**
+	 * The Cassandra DynamicCompositeType will complain if component values of
+	 * two different types are attempted to be compared. The way to prevent this
+	 * and still allow for indexes to store different dynamic values is have a
+	 * value code component that precedes the actual indexed value component in
+	 * the composite. The DynamicCompositeType will first compare the two
+	 * components holding the value codes, and if they don't match, then won't
+	 * compare the next pair of components, avoiding the DynamicCompositeType
+	 * throwing an error.
+	 * 
+	 * @param value
+	 * @return value code
+	 */
 	public static int getIndexableValueCode(Object value) {
 		if (value instanceof String) {
 			return VALUE_CODE_UTF8;
@@ -137,7 +205,7 @@ public class IndexedCollections {
 			Object columnValue, UUID ts_uuid, long timestamp) {
 
 		logger.info("UPDATE " + cf.getIndex() + " SET composite("
-				+ getIndexableValueCode(columnValue) + ","
+				+ getIndexableValueCode(columnValue) + ", "
 				+ getIndexableValue(columnValue) + ", " + itemKey + ", "
 				+ ts_uuid + ") = null WHERE KEY = " + columnIndexKey);
 
@@ -156,7 +224,7 @@ public class IndexedCollections {
 			Object columnValue, UUID prev_timestamp, long timestamp) {
 
 		logger.info("DELETE composite(" + getIndexableValueCode(columnValue)
-				+ "," + getIndexableValue(columnValue) + ", " + itemKey + ", "
+				+ ", " + getIndexableValue(columnValue) + ", " + itemKey + ", "
 				+ prev_timestamp + ") FROM " + cf.getIndex() + " WHERE KEY = "
 				+ columnIndexKey);
 

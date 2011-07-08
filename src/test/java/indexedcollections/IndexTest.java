@@ -197,7 +197,7 @@ public class IndexTest {
 		IndexedCollections.setItemColumn(ko, e2, "name", "steve", containers,
 				IndexedCollections.defaultCFSet, ue, se, se, ue);
 
-		logger.info("SELECT WHERE name='fred'");
+		logger.info("SELECT WHERE name = 'fred'");
 
 		results = IndexedCollections.searchContainer(ko, container, "name",
 				"fred", null, null, 100, false,
@@ -216,6 +216,46 @@ public class IndexTest {
 		logger.info(results.size() + " results found");
 
 		assertEquals(2, results.size());
+
+		IndexedCollections.setItemColumn(ko, e1, "height", (long) 5,
+				containers, IndexedCollections.defaultCFSet, ue, se, le, ue);
+
+		IndexedCollections.setItemColumn(ko, e2, "height", (long) 6,
+				containers, IndexedCollections.defaultCFSet, ue, se, le, ue);
+
+		IndexedCollections.setItemColumn(ko, e3, "height", (long) 7,
+				containers, IndexedCollections.defaultCFSet, ue, se, le, ue);
+
+		logger.info("SELECT WHERE height = 6");
+
+		results = IndexedCollections.searchContainer(ko, container, "height",
+				6, null, null, 100, false, IndexedCollections.defaultCFSet, ue,
+				ue, se);
+
+		logger.info(results.size() + " results found");
+
+		assertEquals(1, results.size());
+
+		logger.info("SELECT WHERE height >= 6 AND name < 10");
+
+		results = IndexedCollections.searchContainer(ko, container, "height",
+				6, 10, null, 100, false, IndexedCollections.defaultCFSet, ue,
+				ue, se);
+
+		logger.info(results.size() + " results found");
+
+		assertEquals(2, results.size());
+
+		IndexedCollections.setItemColumn(ko, e3, "height", (long) 5,
+				containers, IndexedCollections.defaultCFSet, ue, se, le, ue);
+
+		results = IndexedCollections.searchContainer(ko, container, "height",
+				6, 10, null, 100, false, IndexedCollections.defaultCFSet, ue,
+				ue, se);
+
+		logger.info(results.size() + " results found");
+
+		assertEquals(1, results.size());
 
 	}
 
