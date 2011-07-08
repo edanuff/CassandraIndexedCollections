@@ -18,6 +18,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import me.prettyprint.cassandra.serializers.ByteBufferSerializer;
+import me.prettyprint.cassandra.serializers.BytesArraySerializer;
 import me.prettyprint.cassandra.serializers.DynamicCompositeSerializer;
 import me.prettyprint.cassandra.serializers.LongSerializer;
 import me.prettyprint.cassandra.serializers.StringSerializer;
@@ -54,6 +55,7 @@ public class IndexTest {
 	public static final DynamicCompositeSerializer ce = new DynamicCompositeSerializer();
 	public static final UUIDSerializer ue = new UUIDSerializer();
 	public static final LongSerializer le = new LongSerializer();
+	public static final BytesArraySerializer bae = new BytesArraySerializer();
 
 	static EmbeddedServerHelper embedded;
 
@@ -256,6 +258,34 @@ public class IndexTest {
 		logger.info(results.size() + " results found");
 
 		assertEquals(1, results.size());
+
+		IndexedCollections.setItemColumn(ko, e1, "bytes",
+				new byte[] { 1, 2, 3 }, containers,
+				IndexedCollections.defaultCFSet, ue, se, bae, ue);
+
+		IndexedCollections.setItemColumn(ko, e2, "bytes",
+				new byte[] { 1, 2, 4 }, containers,
+				IndexedCollections.defaultCFSet, ue, se, bae, ue);
+
+		IndexedCollections.setItemColumn(ko, e3, "bytes",
+				new byte[] { 1, 2, 5 }, containers,
+				IndexedCollections.defaultCFSet, ue, se, bae, ue);
+
+		results = IndexedCollections.searchContainer(ko, container, "bytes",
+				new byte[] { 1, 2, 4 }, null, null, 100, false,
+				IndexedCollections.defaultCFSet, ue, ue, se);
+
+		logger.info(results.size() + " results found");
+
+		assertEquals(1, results.size());
+
+		results = IndexedCollections.searchContainer(ko, container, "bytes",
+				new byte[] { 1, 2, 4 }, new byte[] { 10 }, null, 100, false,
+				IndexedCollections.defaultCFSet, ue, ue, se);
+
+		logger.info(results.size() + " results found");
+
+		assertEquals(2, results.size());
 
 	}
 

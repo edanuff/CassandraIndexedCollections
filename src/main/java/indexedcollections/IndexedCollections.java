@@ -172,7 +172,12 @@ public class IndexedCollections {
 			return ((BigInteger) value).add(BigInteger.valueOf(1));
 
 		}
-		return TypeInferringSerializer.get().toByteBuffer(value).put((byte) 0);
+		ByteBuffer bb1 = TypeInferringSerializer.get().toByteBuffer(value);
+		ByteBuffer bb2 = ByteBuffer.allocate(bb1.remaining() + 1);
+		bb2.put(bb1);
+		bb2.put((byte) 0);
+		bb2.flip();
+		return bb2;
 	}
 
 	/**
@@ -316,7 +321,9 @@ public class IndexedCollections {
 				ko, itemKeySerializer, ce, ce);
 		q.setColumnFamily(cf.getEntries());
 		q.setKey(itemKey);
-		q.setRange(new DynamicComposite(columnName, new UUID(0, 0)), null,
+		q.setRange(new DynamicComposite(columnName, new UUID(0, 0)),
+				new DynamicComposite(columnName, new UUID(Long.MAX_VALUE
+						| Long.MIN_VALUE, Long.MAX_VALUE | Long.MIN_VALUE)),
 				false, 1000);
 		QueryResult<ColumnSlice<DynamicComposite, DynamicComposite>> r = q
 				.execute();
