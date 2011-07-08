@@ -1,5 +1,7 @@
 package indexedcollections;
 
+import static me.prettyprint.hector.api.beans.DynamicComposite.DEFAULT_DYNAMIC_COMPOSITE_ALIASES;
+import static me.prettyprint.hector.api.ddl.ComparatorType.DYNAMICCOMPOSITETYPE;
 import static me.prettyprint.hector.api.factory.HFactory.createColumn;
 import static me.prettyprint.hector.api.factory.HFactory.createKeyspace;
 import static me.prettyprint.hector.api.factory.HFactory.createMutator;
@@ -16,6 +18,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import me.prettyprint.cassandra.serializers.ByteBufferSerializer;
+import me.prettyprint.cassandra.serializers.DynamicCompositeSerializer;
 import me.prettyprint.cassandra.serializers.LongSerializer;
 import me.prettyprint.cassandra.serializers.StringSerializer;
 import me.prettyprint.cassandra.serializers.UUIDSerializer;
@@ -27,7 +30,6 @@ import me.prettyprint.hector.api.Keyspace;
 
 import org.apache.cassandra.config.ConfigurationException;
 import org.apache.cassandra.db.marshal.BytesType;
-import org.apache.cassandra.db.marshal.LongType;
 import org.apache.cassandra.db.marshal.TimeUUIDType;
 import org.apache.cassandra.thrift.CfDef;
 import org.apache.cassandra.thrift.KsDef;
@@ -36,8 +38,6 @@ import org.apache.thrift.transport.TTransportException;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
-
-import comparators.hector.CompositeSerializer;
 
 /**
  * Example class showing usage of IndexedCollections.
@@ -51,7 +51,7 @@ public class IndexTest {
 
 	public static final StringSerializer se = new StringSerializer();
 	public static final ByteBufferSerializer be = new ByteBufferSerializer();
-	public static final CompositeSerializer ce = new CompositeSerializer();
+	public static final DynamicCompositeSerializer ce = new DynamicCompositeSerializer();
 	public static final UUIDSerializer ue = new UUIDSerializer();
 	public static final LongSerializer le = new LongSerializer();
 
@@ -80,7 +80,7 @@ public class IndexTest {
 
 	@AfterClass
 	public static void teardown() throws IOException {
-		embedded.teardown();
+		EmbeddedServerHelper.teardown();
 		embedded = null;
 	}
 
@@ -89,14 +89,17 @@ public class IndexTest {
 		createCF(IndexedCollections.DEFAULT_ITEM_CF,
 				BytesType.class.getSimpleName(), cfDefList);
 
-		createCF(IndexedCollections.DEFAULT_CONTAINER_ITEMS_CF,
+		createCF(IndexedCollections.DEFAULT_COLLECTION_CF,
 				TimeUUIDType.class.getSimpleName(), cfDefList);
 
-		createCF(IndexedCollections.DEFAULT_CONTAINER_ITEMS_COLUMN_INDEX_CF,
-				"comparators.CompositeType", cfDefList);
+		createCF(IndexedCollections.DEFAULT_COLLECTION_INDEX_CF,
 
-		createCF(IndexedCollections.DEFAULT_CONTAINER_ITEM_INDEX_ENTRIES,
-				LongType.class.getSimpleName(), cfDefList);
+		DYNAMICCOMPOSITETYPE.getTypeName() + DEFAULT_DYNAMIC_COMPOSITE_ALIASES,
+				cfDefList);
+
+		createCF(IndexedCollections.DEFAULT_ITEM_INDEX_ENTRIES,
+				DYNAMICCOMPOSITETYPE.getTypeName()
+						+ DEFAULT_DYNAMIC_COMPOSITE_ALIASES, cfDefList);
 
 	}
 
@@ -115,8 +118,7 @@ public class IndexTest {
 		}
 
 		try {
-			KsDef ksDef = new KsDef(name, strategy, replicationFactor,
-					cfDefList);
+			KsDef ksDef = new KsDef(name, strategy, cfDefList);
 			cluster.addKeyspace(new ThriftKsDef(ksDef));
 			return;
 		} catch (Throwable e) {
@@ -179,7 +181,7 @@ public class IndexTest {
 		IndexedCollections.setItemColumn(ko, e3, "name", "bill", containers,
 				IndexedCollections.defaultCFSet, ue, se, se, ue);
 
-		logger.info("Select where name='fred'");
+		logger.info("SELECT WHERE name = 'fred'");
 
 		List<UUID> results = IndexedCollections.searchContainer(ko, container,
 				"name", "fred", null, null, 100, false,
@@ -195,7 +197,7 @@ public class IndexTest {
 		IndexedCollections.setItemColumn(ko, e2, "name", "steve", containers,
 				IndexedCollections.defaultCFSet, ue, se, se, ue);
 
-		logger.info("Select where name='fred'");
+		logger.info("SELECT WHERE name='fred'");
 
 		results = IndexedCollections.searchContainer(ko, container, "name",
 				"fred", null, null, 100, false,
@@ -205,7 +207,7 @@ public class IndexTest {
 
 		assertEquals(0, results.size());
 
-		logger.info("Select where name>='bill' and name<'c'");
+		logger.info("SELECT WHERE name >= 'bill' AND name < 'c'");
 
 		results = IndexedCollections.searchContainer(ko, container, "name",
 				"bill", "c", null, 100, false, IndexedCollections.defaultCFSet,

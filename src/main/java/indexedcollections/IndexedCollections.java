@@ -25,19 +25,26 @@ import static me.prettyprint.hector.api.factory.HFactory.createColumn;
 import static me.prettyprint.hector.api.factory.HFactory.createMutator;
 import static me.prettyprint.hector.api.factory.HFactory.createSliceQuery;
 
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 import me.prettyprint.cassandra.serializers.ByteBufferSerializer;
 import me.prettyprint.cassandra.serializers.BytesArraySerializer;
+import me.prettyprint.cassandra.serializers.DynamicCompositeSerializer;
 import me.prettyprint.cassandra.serializers.LongSerializer;
 import me.prettyprint.cassandra.serializers.SerializerTypeInferer;
 import me.prettyprint.cassandra.serializers.StringSerializer;
+import me.prettyprint.cassandra.serializers.TypeInferringSerializer;
+import me.prettyprint.cassandra.serializers.UUIDSerializer;
 import me.prettyprint.hector.api.Keyspace;
 import me.prettyprint.hector.api.Serializer;
+import me.prettyprint.hector.api.beans.AbstractComposite.Component;
 import me.prettyprint.hector.api.beans.ColumnSlice;
+import me.prettyprint.hector.api.beans.DynamicComposite;
 import me.prettyprint.hector.api.beans.HColumn;
 import me.prettyprint.hector.api.factory.HFactory;
 import me.prettyprint.hector.api.mutation.Mutator;
@@ -45,9 +52,6 @@ import me.prettyprint.hector.api.query.QueryResult;
 import me.prettyprint.hector.api.query.SliceQuery;
 
 import org.apache.log4j.Logger;
-
-import comparators.Composite;
-import comparators.hector.CompositeSerializer;
 
 /**
  * Simple indexing library using composite types
@@ -70,17 +74,127 @@ public class IndexedCollections {
 			.getLogger(IndexedCollections.class.getName());
 
 	public static final String DEFAULT_ITEM_CF = "Item";
-	public static final String DEFAULT_CONTAINER_ITEMS_CF = "Container_Items";
-	public static final String DEFAULT_CONTAINER_ITEMS_COLUMN_INDEX_CF = "Container_Items_Column_Index";
-	public static final String DEFAULT_CONTAINER_ITEM_INDEX_ENTRIES = "Container_Item_Index_Entries";
+	public static final String DEFAULT_COLLECTION_CF = "Collection";
+	public static final String DEFAULT_ITEM_INDEX_ENTRIES = "Item_Index_Entries";
+	public static final String DEFAULT_COLLECTION_INDEX_CF = "Collection_Index";
+
+	public static final byte VALUE_CODE_BYTES = 0;
+	public static final byte VALUE_CODE_UTF8 = 1;
+	public static final byte VALUE_CODE_UUID = 2;
+	public static final byte VALUE_CODE_INT = 3;
+	public static final byte VALUE_CODE_MAX = 127;
 
 	public static final CollectionCFSet defaultCFSet = new CollectionCFSet();
 
 	public static final StringSerializer se = new StringSerializer();
 	public static final ByteBufferSerializer be = new ByteBufferSerializer();
 	public static final BytesArraySerializer bae = new BytesArraySerializer();
-	public static final CompositeSerializer ce = new CompositeSerializer();
+	public static final DynamicCompositeSerializer ce = new DynamicCompositeSerializer();
 	public static final LongSerializer le = new LongSerializer();
+	public static final UUIDSerializer ue = new UUIDSerializer();
+
+	public static UUID newTimeUUID() {
+		com.eaio.uuid.UUID eaioUUID = new com.eaio.uuid.UUID();
+		return new UUID(eaioUUID.time, eaioUUID.clockSeqAndNode);
+	}
+
+	public static Object getIndexableValue(Object value) {
+		if ((value instanceof String) || (value instanceof UUID)) {
+			return value;
+		}
+		if (value instanceof Number) {
+			return BigInteger.valueOf(((Number) value).longValue());
+		}
+		return TypeInferringSerializer.get().toByteBuffer(value);
+	}
+
+	public static Object getNextIndexableValue(Object value) {
+		if (value instanceof String) {
+			return ((String) value) + "\u0000";
+		} else if (value instanceof UUID) {
+			// TODO do the right thing for different UUID types
+			return value;
+		} else if (value instanceof Number) {
+			return BigInteger.valueOf(((Number) value).longValue() + 1);
+		}
+		return TypeInferringSerializer.get().toByteBuffer(value).put((byte) 0);
+	}
+
+	public static int getIndexableValueCode(Object value) {
+		if (value instanceof String) {
+			return VALUE_CODE_UTF8;
+		} else if (value instanceof UUID) {
+			return VALUE_CODE_UUID;
+		} else if (value instanceof Number) {
+			return VALUE_CODE_INT;
+		} else {
+			return VALUE_CODE_BYTES;
+		}
+	}
+
+	public static <IK> void addIndexInsertion(Mutator<ByteBuffer> batch,
+			CollectionCFSet cf, String columnIndexKey, IK itemKey,
+			Object columnValue, UUID ts_uuid, long timestamp) {
+
+		logger.info("UPDATE " + cf.getIndex() + " SET composite("
+				+ getIndexableValueCode(columnValue) + ","
+				+ getIndexableValue(columnValue) + ", " + itemKey + ", "
+				+ ts_uuid + ") = null WHERE KEY = " + columnIndexKey);
+
+		DynamicComposite indexComposite = new DynamicComposite(
+				getIndexableValueCode(columnValue),
+				getIndexableValue(columnValue), itemKey, ts_uuid);
+
+		batch.addInsertion(se.toByteBuffer(columnIndexKey), cf.getIndex(),
+				HFactory.createColumn(indexComposite, new byte[0], timestamp,
+						ce, bae));
+
+	}
+
+	public static <IK> void addIndexDeletion(Mutator<ByteBuffer> batch,
+			CollectionCFSet cf, String columnIndexKey, IK itemKey,
+			Object columnValue, UUID prev_timestamp, long timestamp) {
+
+		logger.info("DELETE composite(" + getIndexableValueCode(columnValue)
+				+ "," + getIndexableValue(columnValue) + ", " + itemKey + ", "
+				+ prev_timestamp + ") FROM " + cf.getIndex() + " WHERE KEY = "
+				+ columnIndexKey);
+
+		DynamicComposite indexComposite = new DynamicComposite(
+				getIndexableValueCode(columnValue),
+				getIndexableValue(columnValue), itemKey, prev_timestamp);
+
+		batch.addDeletion(se.toByteBuffer(columnIndexKey), cf.getIndex(),
+				indexComposite, ce, timestamp);
+	}
+
+	public static <IK> void addEntriesInsertion(Mutator<ByteBuffer> batch,
+			CollectionCFSet cf, IK itemKey, Object columnName,
+			Object columnValue, UUID ts_uuid, Serializer<IK> itemKeySerializer,
+			long timestamp) {
+
+		logger.info("UPDATE " + cf.getEntries() + " SET composite("
+				+ columnName + ", " + ts_uuid + ") = composite(" + columnValue
+				+ ") WHERE KEY = " + itemKey);
+
+		batch.addInsertion(itemKeySerializer.toByteBuffer(itemKey), cf
+				.getEntries(), HFactory.createColumn(new DynamicComposite(
+				columnName, ts_uuid), new DynamicComposite(columnValue),
+				timestamp, ce, ce));
+	}
+
+	public static <IK> void addEntriesDeletion(Mutator<ByteBuffer> batch,
+			CollectionCFSet cf, IK itemKey, DynamicComposite columnName,
+			Object columnValue, UUID prev_timestamp,
+			Serializer<IK> itemKeySerializer, long timestamp) {
+
+		logger.info("DELETE composite(" + columnName + ", " + prev_timestamp
+				+ ") FROM " + cf.getEntries() + " WHERE KEY = " + itemKey);
+
+		batch.addDeletion(itemKeySerializer.toByteBuffer(itemKey),
+				cf.getEntries(), columnName, ce, timestamp);
+
+	}
 
 	/**
 	 * Sets the item column value for an item contained in a set of collections.
@@ -120,72 +234,70 @@ public class IndexedCollections {
 			Serializer<IK> itemKeySerializer, Serializer<N> nameSerializer,
 			Serializer<V> valueSerializer, Serializer<CK> containerKeySerializer) {
 
-		logger.info("Set " + columnName + "='" + columnValue + "' for item "
+		logger.info("SET " + columnName + " = '" + columnValue + "' FOR ITEM "
 				+ itemKey);
 
 		long timestamp = HFactory.createClock();
 		Mutator<ByteBuffer> batch = createMutator(ko, be);
+		UUID ts_uuid = newTimeUUID();
+
+		// Get all know previous index entries for this item's
+		// indexed column from the item's index entry list
+
+		SliceQuery<IK, DynamicComposite, DynamicComposite> q = createSliceQuery(
+				ko, itemKeySerializer, ce, ce);
+		q.setColumnFamily(cf.getEntries());
+		q.setKey(itemKey);
+		q.setRange(new DynamicComposite(columnName, new UUID(0, 0)), null,
+				false, 1000);
+		QueryResult<ColumnSlice<DynamicComposite, DynamicComposite>> r = q
+				.execute();
+		ColumnSlice<DynamicComposite, DynamicComposite> slice = r.get();
+		List<HColumn<DynamicComposite, DynamicComposite>> entries = slice
+				.getColumns();
+
+		logger.info(entries.size() + " previous values for " + columnName
+				+ " found in index for removal");
+
+		// Delete all previous index entities from the item's index entry list
+
+		for (HColumn<DynamicComposite, DynamicComposite> entry : entries) {
+			UUID prev_timestamp = entry.getName().get(1, ue);
+			Object prev_value = entry.getValue().get(0);
+
+			addEntriesDeletion(batch, cf, itemKey, entry.getName(), prev_value,
+					prev_timestamp, itemKeySerializer, timestamp);
+		}
+
+		// Add the new index entry to the item's index entry list
+
+		if (columnValue != null) {
+			addEntriesInsertion(batch, cf, itemKey, columnName, columnValue,
+					ts_uuid, itemKeySerializer, timestamp);
+		}
 
 		for (ContainerCollection<CK> container : containers) {
 
 			String columnIndexKey = container.getKey() + ":"
 					+ columnName.toString();
 
-			String indexEntriesKey = container.getKey() + ":"
-					+ itemKey.toString() + ":" + columnName.toString();
+			// Delete all previous index entities from both the container's
+			// index
 
-			// Get all know previous index entries for this item's
-			// indexed column from the item's index entry list
+			for (HColumn<DynamicComposite, DynamicComposite> entry : entries) {
+				UUID prev_timestamp = entry.getName().get(1, ue);
+				Object prev_value = entry.getValue().get(0);
 
-			SliceQuery<String, Long, Composite> q = createSliceQuery(ko, se,
-					le, ce);
-			q.setColumnFamily(cf.getEntries());
-			q.setKey(indexEntriesKey);
-			q.setRange(null, null, false, 100);
-			QueryResult<ColumnSlice<Long, Composite>> r = q.execute();
-			ColumnSlice<Long, Composite> slice = r.get();
-			List<HColumn<Long, Composite>> entries = slice.getColumns();
-
-			// Delete all previous index entites from both the container's index
-			// and the item's index entry list
-
-			for (HColumn<Long, Composite> entry : entries) {
-				long prev_timestamp = entry.getName();
-				Object prev_value = entry.getValue().toArray()[0];
-
-				logger.info("Delete {" + prev_timestamp + " : " + prev_value
-						+ "} from " + cf.getEntries() + "(" + columnIndexKey
-						+ ")");
-				batch.addDeletion(se.toByteBuffer(indexEntriesKey),
-						cf.getEntries(), entry.getName(), le, timestamp);
-
-				logger.info("Delete composite(" + prev_value + ", " + itemKey
-						+ ", " + prev_timestamp + ") from " + cf.getIndex()
-						+ "(" + columnIndexKey + ")");
-				batch.addDeletion(se.toByteBuffer(columnIndexKey), cf
-						.getIndex(), new Composite(prev_value, itemKey,
-						prev_timestamp), ce, timestamp);
+				addIndexDeletion(batch, cf, columnIndexKey, itemKey,
+						prev_value, prev_timestamp, timestamp);
 
 			}
 
-			// Add the new index entry into the container's index and the item's
-			// index entry list
+			// Add the new index entry into the container's index
 
 			if (columnValue != null) {
-				logger.info("Insert {composite(" + columnValue + ", " + itemKey
-						+ ", " + timestamp + ") : " + timestamp + "} into "
-						+ cf.getIndex() + "(" + columnIndexKey + ")");
-				batch.addInsertion(se.toByteBuffer(columnIndexKey), cf
-						.getIndex(), HFactory.createColumn(new Composite(
-						columnValue, itemKey, timestamp), new byte[0], ce, bae));
-
-				logger.info("Insert {" + timestamp + " : " + columnValue
-						+ "} into " + cf.getEntries() + "(" + columnIndexKey
-						+ ")");
-				batch.addInsertion(se.toByteBuffer(indexEntriesKey), cf
-						.getEntries(), HFactory.createColumn(timestamp,
-						new Composite(columnValue), le, ce));
-
+				addIndexInsertion(batch, cf, columnIndexKey, itemKey,
+						columnValue, ts_uuid, timestamp);
 			}
 
 		}
@@ -195,12 +307,14 @@ public class IndexedCollections {
 
 		if (columnValue != null) {
 
-			logger.info("Insert " + columnName + " : " + columnValue + " into "
-					+ cf.getItem() + "(" + itemKey + ")");
+			logger.info("UPDATE " + cf.getItem() + " SET " + columnName + " = "
+					+ columnValue + " WHERE KEY = " + itemKey);
 			batch.addInsertion(itemKeySerializer.toByteBuffer(itemKey), cf
 					.getItem(), HFactory.createColumn(columnName, columnValue,
-					nameSerializer, valueSerializer));
+					timestamp, nameSerializer, valueSerializer));
 		} else {
+			logger.info("DELETE " + columnName + " FROM " + cf.getItem()
+					+ " WHERE KEY = " + itemKey);
 			batch.addDeletion(itemKeySerializer.toByteBuffer(itemKey),
 					cf.getItem(), columnName, nameSerializer, timestamp);
 		}
@@ -244,6 +358,7 @@ public class IndexedCollections {
 	 *            the column name serializer
 	 * @return the list of row keys for items who's column value matches
 	 */
+	@SuppressWarnings("unchecked")
 	public static <IK, CK, N> List<IK> searchContainer(Keyspace ko,
 			ContainerCollection<CK> container, N columnName, Object startValue,
 			Object endValue, IK startResult, int count, boolean reversed,
@@ -254,46 +369,56 @@ public class IndexedCollections {
 		String columnIndexKey = container.getKey() + ":"
 				+ columnName.toString();
 
-		SliceQuery<ByteBuffer, Composite, ByteBuffer> q = createSliceQuery(ko,
-				be, ce, be);
+		SliceQuery<ByteBuffer, DynamicComposite, ByteBuffer> q = createSliceQuery(
+				ko, be, ce, be);
 		q.setColumnFamily(cf.getIndex());
 		q.setKey(se.toByteBuffer(columnIndexKey));
 
-		Composite start = null;
+		DynamicComposite start = null;
 
 		if (startValue == null) {
 			if (startResult != null) {
-				start = new Composite(Composite.MATCH_MINIMUM, startResult);
+				start = new DynamicComposite(VALUE_CODE_BYTES, new byte[0],
+						startResult);
 			} else {
-				start = new Composite(Composite.MATCH_MINIMUM);
+				start = new DynamicComposite(VALUE_CODE_BYTES, new byte[0]);
 			}
 		} else if (startResult != null) {
-			start = new Composite(startValue, startResult);
+			start = new DynamicComposite(getIndexableValueCode(startValue),
+					getIndexableValue(startValue), startResult);
 		} else {
-			start = new Composite(startValue);
+			start = new DynamicComposite(getIndexableValueCode(startValue),
+					getIndexableValue(startValue));
 		}
 
-		Composite finish = null;
+		DynamicComposite finish = null;
 
 		if (endValue == null) {
-			if (startValue != null) {
-				finish = new Composite(startValue, Composite.MATCH_MAXIMUM);
-			} else {
-				finish = new Composite(Composite.MATCH_MAXIMUM);
-			}
+			finish = new DynamicComposite();
+			@SuppressWarnings("rawtypes")
+			Component c = start.getComponent(0);
+			finish.addComponent(c.getValue(), c.getSerializer(),
+					c.getComparator(), c.getEquality());
+			c = start.getComponent(1);
+			finish.addComponent(getNextIndexableValue(c.getValue()),
+					c.getSerializer(), c.getComparator(), c.getEquality());
 		} else {
-			finish = new Composite(endValue);
+			finish = new DynamicComposite(getIndexableValueCode(endValue),
+					getIndexableValue(endValue));
 		}
 
 		q.setRange(start, finish, reversed, count);
-		QueryResult<ColumnSlice<Composite, ByteBuffer>> r = q.execute();
-		ColumnSlice<Composite, ByteBuffer> slice = r.get();
-		List<HColumn<Composite, ByteBuffer>> results = slice.getColumns();
+		QueryResult<ColumnSlice<DynamicComposite, ByteBuffer>> r = q.execute();
+		ColumnSlice<DynamicComposite, ByteBuffer> slice = r.get();
+		List<HColumn<DynamicComposite, ByteBuffer>> results = slice
+				.getColumns();
 
 		if (results != null) {
-			for (HColumn<Composite, ByteBuffer> result : results) {
-				IK key = getAsType(result.getName().toArray()[1],
-						itemKeySerializer);
+			for (HColumn<DynamicComposite, ByteBuffer> result : results) {
+				Object value = result.getName().get(1);
+				logger.info("Value found: " + value);
+
+				IK key = result.getName().get(2, itemKeySerializer);
 				if (key != null) {
 					items.add(key);
 				}
@@ -360,9 +485,9 @@ public class IndexedCollections {
 	public static class CollectionCFSet {
 
 		private String item = DEFAULT_ITEM_CF;
-		private String items = DEFAULT_CONTAINER_ITEMS_CF;
-		private String index = DEFAULT_CONTAINER_ITEMS_COLUMN_INDEX_CF;
-		private String entries = DEFAULT_CONTAINER_ITEM_INDEX_ENTRIES;
+		private String items = DEFAULT_COLLECTION_CF;
+		private String index = DEFAULT_COLLECTION_INDEX_CF;
+		private String entries = DEFAULT_ITEM_INDEX_ENTRIES;
 
 		public CollectionCFSet() {
 		}

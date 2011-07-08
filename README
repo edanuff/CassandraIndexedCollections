@@ -1,32 +1,25 @@
 Indexed Collections for Cassandra
 
+NOTE: This has been updated to use the new built-in composite types in Cassandra 0.8.1
+
+You will need to use Hector 0.8.0-2-SNAPSHOT or later and Cassandra 0.8.1 or later.
+
 This is an implementation of the indexing technique described here:
 
 http://www.anuff.com/2010/07/secondary-indexes-in-cassandra.html
 
-This requires Hector, the Java client for Cassandra (https://github.com/rantav/hector), to run.
-
-It also uses Cassandra Composite Types (https://github.com/edanuff/CassandraCompositeType) and
-requires that the CompositeType comparer be installed in the running Cassandra instance.
+The original article describes the use of a custom composite column comparator.  A
+version of this comparator has recently been added to the latest verion of Cassandra,
+meaning that it's no longer necessary to install anthing on the Cassandra instance
+to handle composite types.
 
 This is a simplified version of a more complex indexing scheme thats been in used
 for some time now as part of a large project.  However, this simplified implementation was
 largely created from scratch and hasn't been extensively tested.
 
--------------------------------------------------------------------------------
-Note:
+The advantage of this indexing technique is that it combines relationships with mini-indexes
+so that you can have a user who's friends with 5 other users and then be able to search the
+user's friend list.  In this example, the user is what is referred to in the
+code as the "container" and the other users are "items".
 
-The composite comparer used here will be superceded by the compositee type
-proposed in https://issues.apache.org/jira/browse/CASSANDRA-2231 and will
-hopefully be present at some point at or after the release of 0.7.4.
-Once that has been built into Cassandra, the recommended approach will
-be to use the new DynamicCompositeType comparer and this example will be updated
-to reflect that.
-
-The index-building techniques described here will still be applicable
-though and should be used in place of SuperColumn-based approaches and,
-once support for composite-based indexes are incorporated into the major
-client libraries, will often be preferable to the built-in secondary
-indexes as well.
--------------------------------------------------------------------------------
-
+For examples of use, look at the class IndextText.

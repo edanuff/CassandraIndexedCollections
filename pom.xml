@@ -60,7 +60,7 @@
 		<dependency>
 			<groupId>org.apache.cassandra</groupId>
 			<artifactId>cassandra-all</artifactId>
-			<version>0.7.0</version>
+			<version>0.8.1</version>
 			<type>jar</type>
 		</dependency>
 		<dependency>
@@ -72,17 +72,12 @@
 		<dependency>
 			<groupId>me.prettyprint</groupId>
 			<artifactId>hector-core</artifactId>
-			<version>0.7.0-23</version>
+			<version>0.8.0-2-SNAPSHOT</version>
 		</dependency>
 		<dependency>
-			<groupId>com.eaio.uuid</groupId>
+			<groupId>com.github.stephenc.eaio-uuid</groupId>
 			<artifactId>uuid</artifactId>
-			<version>3.2</version>
-		</dependency>
-		<dependency>
-			<groupId>cassandra-composite-type</groupId>
-			<artifactId>cassandra-composite-type</artifactId>
-			<version>0.0.1</version>
+			<version>3.2.0</version>
 		</dependency>
 		<dependency>
 			<groupId>junit</groupId>
@@ -113,26 +108,17 @@
 	</dependencies>
 	<repositories>
 		<repository>
-			<id>riptano</id>
-			<name>riptano</name>
-			<url>http://mvn.riptano.com/content/repositories/public/</url>
-		</repository>
-		<repository>
 			<id>codehaus</id>
 			<name>codehaus</name>
 			<url>http://repository.codehaus.org/</url>
 		</repository>
+		<repository>
+			<id>nexus-snapshots</id>
+			<name>Sonatype Nexus Snapshots</name>
+			<url>http://oss.sonatype.org/content/repositories/snapshots</url>
+			<snapshots>
+				<enabled>true</enabled>
+			</snapshots>
+		</repository>
 	</repositories>
-	<profiles>
-		<profile>
-			<id>riptano</id>
-			<distributionManagement>
-				<repository>
-					<id>riptano</id>
-					<name>riptano</name>
-					<url>http://mvn.riptano.com/content/repositories/public/</url>
-				</repository>
-			</distributionManagement>
-		</profile>
-	</profiles>
 </project>
