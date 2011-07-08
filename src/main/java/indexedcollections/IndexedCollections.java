@@ -85,6 +85,9 @@ public class IndexedCollections {
 	public static final byte VALUE_CODE_INT = 3;
 	public static final byte VALUE_CODE_MAX = 127;
 
+	public static final int DEFAULT_COUNT = 100;
+	public static final int ALL_COUNT = 100000;
+
 	public static final CollectionCFSet defaultCFSet = new CollectionCFSet();
 
 	public static final StringSerializer se = new StringSerializer();
@@ -273,7 +276,7 @@ public class IndexedCollections {
 		q.setRange(new DynamicComposite(columnName, new UUID(0, 0)),
 				new DynamicComposite(columnName, new UUID(Long.MAX_VALUE
 						| Long.MIN_VALUE, Long.MAX_VALUE | Long.MIN_VALUE)),
-				false, 1000);
+				false, ALL_COUNT);
 		QueryResult<ColumnSlice<DynamicComposite, DynamicComposite>> r = q
 				.execute();
 		ColumnSlice<DynamicComposite, DynamicComposite> slice = r.get();
@@ -440,6 +443,10 @@ public class IndexedCollections {
 		String columnIndexKey = container.getKey() + ":"
 				+ columnName.toString();
 
+		if (count == 0) {
+			count = DEFAULT_COUNT;
+		}
+
 		SliceQuery<ByteBuffer, DynamicComposite, ByteBuffer> q = createSliceQuery(
 				ko, be, ce, be);
 		q.setColumnFamily(cf.getIndex());
@@ -519,7 +526,6 @@ public class IndexedCollections {
 	 */
 	public static <CK, IK> void addItemToCollection(Keyspace ko,
 			ContainerCollection<CK> container, IK itemKey, CollectionCFSet cf,
-			Serializer<CK> containerKeySerializer,
 			Serializer<IK> itemKeySerializer) {
 
 		createMutator(ko, se).insert(
@@ -528,6 +534,24 @@ public class IndexedCollections {
 				createColumn(itemKey, HFactory.createClock(),
 						itemKeySerializer, le));
 
+	}
+
+	public static <CK, IK> List<IK> getItemsInCollection(Keyspace ko,
+			ContainerCollection<CK> container, CollectionCFSet cf,
+			Serializer<IK> itemKeySerializer) {
+		List<IK> keys = new ArrayList<IK>();
+		SliceQuery<String, IK, ByteBuffer> q = createSliceQuery(ko, se,
+				itemKeySerializer, be);
+		q.setColumnFamily(cf.getItems());
+		q.setKey(container.getKey());
+		q.setRange(null, null, false, ALL_COUNT);
+		QueryResult<ColumnSlice<IK, ByteBuffer>> r = q.execute();
+		ColumnSlice<IK, ByteBuffer> slice = r.get();
+		List<HColumn<IK, ByteBuffer>> results = slice.getColumns();
+		for (HColumn<IK, ByteBuffer> column : results) {
+			keys.add(column.getName());
+		}
+		return keys;
 	}
 
 	@SuppressWarnings("unchecked")
