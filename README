@@ -17,7 +17,11 @@ This is a simplified version of a more complex indexing scheme thats been in use
 for some time now as part of a large project.  However, this simplified implementation was
 largely created from scratch and hasn't been extensively tested.
 
-The advantage of this indexing technique is that it combines relationships with mini-indexes
+This indexing, as opposed to Cassandra's built-in secondary indexes, is completely
+dynamic.  It's possible to create new indexes at any time and the index value types don't
+have to be predefined, making use with JSON data easier.
+
+One advantage of this indexing technique is that it combines relationships with mini-indexes
 so that you can have a user who's friends with 5 other users and then be able to search the
 user's friend list.  In this example, the user is what is referred to in the
 code as the "container" and the other users are "items".
