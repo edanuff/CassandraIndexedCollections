@@ -103,6 +103,8 @@ public class IndexedCollections {
 	 * Convert values to be indexed into types that can be compared by
 	 * Cassandra: UTF8Type, UUIDType, IntegerType, and BytesType
 	 * 
+	 * @param value
+	 * @return value transformed into String, UUID, BigInteger, or ByteBuffer
 	 */
 	public static Object getIndexableValue(Object value) {
 
@@ -152,7 +154,7 @@ public class IndexedCollections {
 		}
 	}
 
-	public static <IK> void addIndexInsertion(Mutator<ByteBuffer> batch,
+	private static <IK> void addIndexInsertion(Mutator<ByteBuffer> batch,
 			CollectionCFSet cf, String columnIndexKey, IK itemKey,
 			Object columnValue, UUID ts_uuid, long timestamp) {
 
@@ -171,7 +173,7 @@ public class IndexedCollections {
 
 	}
 
-	public static <IK> void addIndexDeletion(Mutator<ByteBuffer> batch,
+	private static <IK> void addIndexDeletion(Mutator<ByteBuffer> batch,
 			CollectionCFSet cf, String columnIndexKey, IK itemKey,
 			Object columnValue, UUID prev_timestamp, long timestamp) {
 
@@ -188,7 +190,7 @@ public class IndexedCollections {
 				indexComposite, ce, timestamp);
 	}
 
-	public static <IK> void addEntriesInsertion(Mutator<ByteBuffer> batch,
+	private static <IK> void addEntriesInsertion(Mutator<ByteBuffer> batch,
 			CollectionCFSet cf, IK itemKey, Object columnName,
 			Object columnValue, UUID ts_uuid, Serializer<IK> itemKeySerializer,
 			long timestamp) {
@@ -203,7 +205,7 @@ public class IndexedCollections {
 				timestamp, ce, ce));
 	}
 
-	public static <IK> void addEntriesDeletion(Mutator<ByteBuffer> batch,
+	private static <IK> void addEntriesDeletion(Mutator<ByteBuffer> batch,
 			CollectionCFSet cf, IK itemKey, DynamicComposite columnName,
 			Object columnValue, UUID prev_timestamp,
 			Serializer<IK> itemKeySerializer, long timestamp) {
@@ -360,10 +362,8 @@ public class IndexedCollections {
 	 *            the ContainerCollection (container key and collection name)
 	 * @param columnName
 	 *            the item's column name
-	 * @param startValue
-	 *            the start value for the specified column (inclusive)
-	 * @param endValue
-	 *            the end value for the specified column (exclusive)
+	 * @param searchValue
+	 *            the exact value for the specified column
 	 * @param startResult
 	 *            the start result row key
 	 * @param count
@@ -409,7 +409,9 @@ public class IndexedCollections {
 	 * @param startValue
 	 *            the start value for the specified column (inclusive)
 	 * @param endValue
-	 *            the end value for the specified column (exclusive)
+	 *            the end value for the specified column
+	 * @param inclusive
+	 *            whether end value for the specified column is inclusive
 	 * @param startResult
 	 *            the start result row key
 	 * @param count
@@ -502,10 +504,6 @@ public class IndexedCollections {
 	 *            the container's key type
 	 * @param <IK>
 	 *            the item's key type
-	 * @param <N>
-	 *            the item's column name type
-	 * @param <V>
-	 *            the item's column value type
 	 * @param ko
 	 *            the keyspace operator
 	 * @param container
@@ -519,7 +517,7 @@ public class IndexedCollections {
 	 * @param itemKeySerializer
 	 *            the item key serializer
 	 */
-	public static <CK, IK, N, V> void addItemToCollection(Keyspace ko,
+	public static <CK, IK> void addItemToCollection(Keyspace ko,
 			ContainerCollection<CK> container, IK itemKey, CollectionCFSet cf,
 			Serializer<CK> containerKeySerializer,
 			Serializer<IK> itemKeySerializer) {
