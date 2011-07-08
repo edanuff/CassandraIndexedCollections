@@ -62,6 +62,164 @@ public class IndexTest {
 	static Cluster cluster;
 	static Keyspace ko;
 
+	@Test
+	public void testIndexes() throws IOException, TTransportException,
+			InterruptedException, ConfigurationException {
+
+		UUID g1 = createEntity("company");
+		ContainerCollection<UUID> container = new ContainerCollection<UUID>(g1,
+				"employees");
+		Set<ContainerCollection<UUID>> containers = new LinkedHashSet<ContainerCollection<UUID>>();
+		containers.add(container);
+
+		UUID e1 = createEntity("employee");
+		UUID e2 = createEntity("employee");
+		UUID e3 = createEntity("employee");
+
+		addEntityToCollection(container, e1);
+		addEntityToCollection(container, e2);
+		addEntityToCollection(container, e3);
+
+		IndexedCollections.setItemColumn(ko, e1, "name", "bob", containers,
+				IndexedCollections.defaultCFSet, ue, se, se, ue);
+
+		IndexedCollections.setItemColumn(ko, e2, "name", "fred", containers,
+				IndexedCollections.defaultCFSet, ue, se, se, ue);
+
+		IndexedCollections.setItemColumn(ko, e3, "name", "bill", containers,
+				IndexedCollections.defaultCFSet, ue, se, se, ue);
+
+		logger.info("SELECT WHERE name = 'fred'");
+
+		List<UUID> results = IndexedCollections.searchContainer(ko, container,
+				"name", "fred", null, false, null, 100, false,
+				IndexedCollections.defaultCFSet, ue, ue, se);
+
+		logger.info(results.size() + " results found");
+
+		assertEquals(1, results.size());
+		assertTrue(results.get(0).equals(e2));
+
+		logger.info("Result found is " + results.get(0));
+
+		IndexedCollections.setItemColumn(ko, e2, "name", "steve", containers,
+				IndexedCollections.defaultCFSet, ue, se, se, ue);
+
+		logger.info("SELECT WHERE name = 'fred'");
+
+		results = IndexedCollections.searchContainer(ko, container, "name",
+				"fred", null, 100, false, IndexedCollections.defaultCFSet, ue,
+				ue, se);
+
+		logger.info(results.size() + " results found");
+
+		assertEquals(0, results.size());
+
+		logger.info("SELECT WHERE name >= 'bill' AND name < 'c'");
+
+		results = IndexedCollections.searchContainer(ko, container, "name",
+				"bill", "c", false, null, 100, false,
+				IndexedCollections.defaultCFSet, ue, ue, se);
+
+		logger.info(results.size() + " results found");
+
+		assertEquals(2, results.size());
+
+		IndexedCollections.setItemColumn(ko, e1, "height", (long) 5,
+				containers, IndexedCollections.defaultCFSet, ue, se, le, ue);
+
+		IndexedCollections.setItemColumn(ko, e2, "height", (long) 6,
+				containers, IndexedCollections.defaultCFSet, ue, se, le, ue);
+
+		IndexedCollections.setItemColumn(ko, e3, "height", (long) 7,
+				containers, IndexedCollections.defaultCFSet, ue, se, le, ue);
+
+		logger.info("SELECT WHERE height = 6");
+
+		results = IndexedCollections.searchContainer(ko, container, "height",
+				6, null, 100, false, IndexedCollections.defaultCFSet, ue, ue,
+				se);
+
+		logger.info(results.size() + " results found");
+
+		assertEquals(1, results.size());
+
+		logger.info("SELECT WHERE height >= 6 AND name < 10");
+
+		results = IndexedCollections.searchContainer(ko, container, "height",
+				6, 10, false, null, 100, false,
+				IndexedCollections.defaultCFSet, ue, ue, se);
+
+		logger.info(results.size() + " results found");
+
+		assertEquals(2, results.size());
+
+		IndexedCollections.setItemColumn(ko, e3, "height", (long) 5,
+				containers, IndexedCollections.defaultCFSet, ue, se, le, ue);
+
+		results = IndexedCollections.searchContainer(ko, container, "height",
+				6, 10, false, null, 100, false,
+				IndexedCollections.defaultCFSet, ue, ue, se);
+
+		logger.info(results.size() + " results found");
+
+		assertEquals(1, results.size());
+
+		IndexedCollections.setItemColumn(ko, e1, "bytes",
+				new byte[] { 1, 2, 3 }, containers,
+				IndexedCollections.defaultCFSet, ue, se, bae, ue);
+
+		IndexedCollections.setItemColumn(ko, e2, "bytes",
+				new byte[] { 1, 2, 4 }, containers,
+				IndexedCollections.defaultCFSet, ue, se, bae, ue);
+
+		IndexedCollections.setItemColumn(ko, e3, "bytes",
+				new byte[] { 1, 2, 5 }, containers,
+				IndexedCollections.defaultCFSet, ue, se, bae, ue);
+
+		results = IndexedCollections.searchContainer(ko, container, "bytes",
+				new byte[] { 1, 2, 4 }, null, 100, false,
+				IndexedCollections.defaultCFSet, ue, ue, se);
+
+		logger.info(results.size() + " results found");
+
+		assertEquals(1, results.size());
+
+		results = IndexedCollections.searchContainer(ko, container, "bytes",
+				new byte[] { 1, 2, 4 }, new byte[] { 10 }, false, null, 100,
+				false, IndexedCollections.defaultCFSet, ue, ue, se);
+
+		logger.info(results.size() + " results found");
+
+		assertEquals(2, results.size());
+
+		IndexedCollections.setItemColumn(ko, e1, "location", "san francisco",
+				containers, IndexedCollections.defaultCFSet, ue, se, se, ue);
+
+		IndexedCollections.setItemColumn(ko, e2, "location", "san diego",
+				containers, IndexedCollections.defaultCFSet, ue, se, se, ue);
+
+		IndexedCollections.setItemColumn(ko, e3, "location", "santa clara",
+				containers, IndexedCollections.defaultCFSet, ue, se, se, ue);
+
+		results = IndexedCollections.searchContainer(ko, container, "location",
+				"san francisco", "san francisco", false, null, 100, false,
+				IndexedCollections.defaultCFSet, ue, ue, se);
+
+		logger.info(results.size() + " results found");
+
+		assertEquals(0, results.size());
+
+		results = IndexedCollections.searchContainer(ko, container, "location",
+				"san francisco", "san francisco", true, null, 100, false,
+				IndexedCollections.defaultCFSet, ue, ue, se);
+
+		logger.info(results.size() + " results found");
+
+		assertEquals(1, results.size());
+
+	}
+
 	@BeforeClass
 	public static void setup() throws TTransportException, IOException,
 			InterruptedException, ConfigurationException {
@@ -154,139 +312,6 @@ public class IndexTest {
 			UUID itemEntity) {
 		IndexedCollections.addItemToCollection(ko, container, itemEntity,
 				IndexedCollections.defaultCFSet, ue, ue);
-	}
-
-	@Test
-	public void testIndexes() throws IOException, TTransportException,
-			InterruptedException, ConfigurationException {
-
-		UUID g1 = createEntity("company");
-		ContainerCollection<UUID> container = new ContainerCollection<UUID>(g1,
-				"employees");
-		Set<ContainerCollection<UUID>> containers = new LinkedHashSet<ContainerCollection<UUID>>();
-		containers.add(container);
-
-		UUID e1 = createEntity("employee");
-		UUID e2 = createEntity("employee");
-		UUID e3 = createEntity("employee");
-
-		addEntityToCollection(container, e1);
-		addEntityToCollection(container, e2);
-		addEntityToCollection(container, e3);
-
-		IndexedCollections.setItemColumn(ko, e1, "name", "bob", containers,
-				IndexedCollections.defaultCFSet, ue, se, se, ue);
-
-		IndexedCollections.setItemColumn(ko, e2, "name", "fred", containers,
-				IndexedCollections.defaultCFSet, ue, se, se, ue);
-
-		IndexedCollections.setItemColumn(ko, e3, "name", "bill", containers,
-				IndexedCollections.defaultCFSet, ue, se, se, ue);
-
-		logger.info("SELECT WHERE name = 'fred'");
-
-		List<UUID> results = IndexedCollections.searchContainer(ko, container,
-				"name", "fred", null, null, 100, false,
-				IndexedCollections.defaultCFSet, ue, ue, se);
-
-		logger.info(results.size() + " results found");
-
-		assertEquals(1, results.size());
-		assertTrue(results.get(0).equals(e2));
-
-		logger.info("Result found is " + results.get(0));
-
-		IndexedCollections.setItemColumn(ko, e2, "name", "steve", containers,
-				IndexedCollections.defaultCFSet, ue, se, se, ue);
-
-		logger.info("SELECT WHERE name = 'fred'");
-
-		results = IndexedCollections.searchContainer(ko, container, "name",
-				"fred", null, null, 100, false,
-				IndexedCollections.defaultCFSet, ue, ue, se);
-
-		logger.info(results.size() + " results found");
-
-		assertEquals(0, results.size());
-
-		logger.info("SELECT WHERE name >= 'bill' AND name < 'c'");
-
-		results = IndexedCollections.searchContainer(ko, container, "name",
-				"bill", "c", null, 100, false, IndexedCollections.defaultCFSet,
-				ue, ue, se);
-
-		logger.info(results.size() + " results found");
-
-		assertEquals(2, results.size());
-
-		IndexedCollections.setItemColumn(ko, e1, "height", (long) 5,
-				containers, IndexedCollections.defaultCFSet, ue, se, le, ue);
-
-		IndexedCollections.setItemColumn(ko, e2, "height", (long) 6,
-				containers, IndexedCollections.defaultCFSet, ue, se, le, ue);
-
-		IndexedCollections.setItemColumn(ko, e3, "height", (long) 7,
-				containers, IndexedCollections.defaultCFSet, ue, se, le, ue);
-
-		logger.info("SELECT WHERE height = 6");
-
-		results = IndexedCollections.searchContainer(ko, container, "height",
-				6, null, null, 100, false, IndexedCollections.defaultCFSet, ue,
-				ue, se);
-
-		logger.info(results.size() + " results found");
-
-		assertEquals(1, results.size());
-
-		logger.info("SELECT WHERE height >= 6 AND name < 10");
-
-		results = IndexedCollections.searchContainer(ko, container, "height",
-				6, 10, null, 100, false, IndexedCollections.defaultCFSet, ue,
-				ue, se);
-
-		logger.info(results.size() + " results found");
-
-		assertEquals(2, results.size());
-
-		IndexedCollections.setItemColumn(ko, e3, "height", (long) 5,
-				containers, IndexedCollections.defaultCFSet, ue, se, le, ue);
-
-		results = IndexedCollections.searchContainer(ko, container, "height",
-				6, 10, null, 100, false, IndexedCollections.defaultCFSet, ue,
-				ue, se);
-
-		logger.info(results.size() + " results found");
-
-		assertEquals(1, results.size());
-
-		IndexedCollections.setItemColumn(ko, e1, "bytes",
-				new byte[] { 1, 2, 3 }, containers,
-				IndexedCollections.defaultCFSet, ue, se, bae, ue);
-
-		IndexedCollections.setItemColumn(ko, e2, "bytes",
-				new byte[] { 1, 2, 4 }, containers,
-				IndexedCollections.defaultCFSet, ue, se, bae, ue);
-
-		IndexedCollections.setItemColumn(ko, e3, "bytes",
-				new byte[] { 1, 2, 5 }, containers,
-				IndexedCollections.defaultCFSet, ue, se, bae, ue);
-
-		results = IndexedCollections.searchContainer(ko, container, "bytes",
-				new byte[] { 1, 2, 4 }, null, null, 100, false,
-				IndexedCollections.defaultCFSet, ue, ue, se);
-
-		logger.info(results.size() + " results found");
-
-		assertEquals(1, results.size());
-
-		results = IndexedCollections.searchContainer(ko, container, "bytes",
-				new byte[] { 1, 2, 4 }, new byte[] { 10 }, null, 100, false,
-				IndexedCollections.defaultCFSet, ue, ue, se);
-
-		logger.info(results.size() + " results found");
-
-		assertEquals(2, results.size());
-
 	}
 
 }

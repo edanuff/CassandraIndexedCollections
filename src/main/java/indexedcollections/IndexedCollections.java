@@ -42,6 +42,7 @@ import me.prettyprint.cassandra.serializers.TypeInferringSerializer;
 import me.prettyprint.cassandra.serializers.UUIDSerializer;
 import me.prettyprint.hector.api.Keyspace;
 import me.prettyprint.hector.api.Serializer;
+import me.prettyprint.hector.api.beans.AbstractComposite;
 import me.prettyprint.hector.api.beans.AbstractComposite.Component;
 import me.prettyprint.hector.api.beans.ColumnSlice;
 import me.prettyprint.hector.api.beans.DynamicComposite;
@@ -51,10 +52,7 @@ import me.prettyprint.hector.api.mutation.Mutator;
 import me.prettyprint.hector.api.query.QueryResult;
 import me.prettyprint.hector.api.query.SliceQuery;
 
-import org.apache.commons.lang.ArrayUtils;
 import org.apache.log4j.Logger;
-
-import com.eaio.uuid.UUIDGen;
 
 /**
  * Simple indexing library using composite types
@@ -108,6 +106,10 @@ public class IndexedCollections {
 	 */
 	public static Object getIndexableValue(Object value) {
 
+		if (value == null) {
+			return null;
+		}
+
 		// Strings, UUIDs, and BigIntegers map to Cassandra
 		// UTF8Type, UUIDType, and IntegerType
 		if ((value instanceof String) || (value instanceof UUID)
@@ -123,61 +125,6 @@ public class IndexedCollections {
 
 		// Anything else, we're going to have to use BytesType
 		return TypeInferringSerializer.get().toByteBuffer(value);
-	}
-
-	/**
-	 * Create a value that will compare as one more than the specified value. A
-	 * little bit hacky, but makes things quite a bit easier.
-	 * 
-	 */
-	public static Object getNextIndexableValue(Object value) {
-
-		if (value instanceof String) {
-
-			return ((String) value) + "\u0000";
-
-		} else if (value instanceof UUID) {
-			UUID uuid = ((UUID) value);
-
-			// increase timestamp by 1 for time UUIDS
-			int version = uuid.version();
-			if (version == 1) {
-				return new UUID(UUIDGen.createTime(uuid.timestamp() + 1),
-						uuid.getLeastSignificantBits());
-			}
-
-			// for lexical, treat as 16 byte unsigned integer
-			ByteBuffer bb = ByteBuffer.allocate(16);
-			bb.putLong(uuid.getMostSignificantBits());
-			bb.putLong(uuid.getLeastSignificantBits());
-			BigInteger big = new BigInteger(bb.array());
-			big = big.add(BigInteger.valueOf(1));
-			byte[] bytes = big.toByteArray();
-			if (bytes.length < 16) {
-				bytes = ArrayUtils.addAll(new byte[16 - bytes.length], bytes);
-			}
-			bytes[6] &= 0x0f;
-			bytes[6] |= ((byte) version) << 4;
-			bytes[8] &= 0x3f;
-			bytes[8] |= 0x80;
-			bb = ByteBuffer.wrap(bytes);
-			return new UUID(bb.getLong(), bb.getLong());
-
-		} else if (value instanceof Number) {
-
-			return BigInteger.valueOf(((Number) value).longValue() + 1);
-
-		} else if (value instanceof BigInteger) {
-
-			return ((BigInteger) value).add(BigInteger.valueOf(1));
-
-		}
-		ByteBuffer bb1 = TypeInferringSerializer.get().toByteBuffer(value);
-		ByteBuffer bb2 = ByteBuffer.allocate(bb1.remaining() + 1);
-		bb2.put(bb1);
-		bb2.put((byte) 0);
-		bb2.flip();
-		return bb2;
 	}
 
 	/**
@@ -433,11 +380,58 @@ public class IndexedCollections {
 	 *            the column name serializer
 	 * @return the list of row keys for items who's column value matches
 	 */
+	public static <IK, CK, N> List<IK> searchContainer(Keyspace ko,
+			ContainerCollection<CK> container, N columnName,
+			Object searchValue, IK startResult, int count, boolean reversed,
+			CollectionCFSet cf, Serializer<CK> containerKeySerializer,
+			Serializer<IK> itemKeySerializer, Serializer<N> nameSerializer) {
+
+		return searchContainer(ko, container, columnName, searchValue,
+				searchValue, true, startResult, count, reversed, cf,
+				containerKeySerializer, itemKeySerializer, nameSerializer);
+	}
+
+	/**
+	 * Search container.
+	 * 
+	 * @param <IK>
+	 *            the item's key type
+	 * @param <CK>
+	 *            the container's key type
+	 * @param <N>
+	 *            the item's column name type
+	 * @param ko
+	 *            the keyspace operator
+	 * @param container
+	 *            the ContainerCollection (container key and collection name)
+	 * @param columnName
+	 *            the item's column name
+	 * @param startValue
+	 *            the start value for the specified column (inclusive)
+	 * @param endValue
+	 *            the end value for the specified column (exclusive)
+	 * @param startResult
+	 *            the start result row key
+	 * @param count
+	 *            the number of row keys to return
+	 * @param reversed
+	 *            search in reverse order
+	 * @param cf
+	 *            the column family set
+	 * @param containerKeySerializer
+	 *            the container key serializer
+	 * @param itemKeySerializer
+	 *            the item key serializer
+	 * @param nameSerializer
+	 *            the column name serializer
+	 * @return the list of row keys for items who's column value matches
+	 */
 	@SuppressWarnings("unchecked")
 	public static <IK, CK, N> List<IK> searchContainer(Keyspace ko,
 			ContainerCollection<CK> container, N columnName, Object startValue,
-			Object endValue, IK startResult, int count, boolean reversed,
-			CollectionCFSet cf, Serializer<CK> containerKeySerializer,
+			Object endValue, boolean inclusive, IK startResult, int count,
+			boolean reversed, CollectionCFSet cf,
+			Serializer<CK> containerKeySerializer,
 			Serializer<IK> itemKeySerializer, Serializer<N> nameSerializer) {
 		List<IK> items = new ArrayList<IK>();
 
@@ -468,18 +462,16 @@ public class IndexedCollections {
 
 		DynamicComposite finish = null;
 
-		if (endValue == null) {
-			finish = new DynamicComposite();
-			@SuppressWarnings("rawtypes")
-			Component c = start.getComponent(0);
-			finish.addComponent(c.getValue(), c.getSerializer(),
-					c.getComparator(), c.getEquality());
-			c = start.getComponent(1);
-			finish.addComponent(getNextIndexableValue(c.getValue()),
-					c.getSerializer(), c.getComparator(), c.getEquality());
-		} else {
+		if (endValue != null) {
 			finish = new DynamicComposite(getIndexableValueCode(endValue),
 					getIndexableValue(endValue));
+			if (inclusive) {
+				@SuppressWarnings("rawtypes")
+				Component c = finish.getComponent(1);
+				finish.setComponent(1, c.getValue(), c.getSerializer(),
+						c.getComparator(),
+						AbstractComposite.ComponentEquality.GREATER_THAN_EQUAL);
+			}
 		}
 
 		q.setRange(start, finish, reversed, count);
